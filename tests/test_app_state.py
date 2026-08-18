@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from pacechart.app_state import AppState, all_pace_keys
+from pacechart.app_state import AppState, GroupBy, all_pace_keys
 from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES
 from pacechart.models import Athlete, Gender, Meet, RaceResult
 from pacechart.scraper import ScheduledMeet
@@ -198,3 +198,32 @@ def test_calculate_clears_previous_results_first():
 
     assert state.computed_performance[1] is None
     assert state.computed_paces[1] is None
+
+
+def test_sorted_enabled_paces_defaults_to_grouped_by_zone():
+    state = AppState()
+    state.disable_all_paces()
+    state.set_pace_enabled("Threshold", "Mile", True)
+    state.set_pace_enabled("Easy", "1000m", True)
+    state.set_pace_enabled("Easy", "Mile", True)
+
+    ordered = state.sorted_enabled_paces()
+
+    # Easy (lower intensity) sorts before Threshold; within a zone, Mile
+    # (first in DISPLAY_DISTANCES_KM) sorts before 1000m.
+    assert ordered == [("Easy", "Mile"), ("Easy", "1000m"), ("Threshold", "Mile")]
+
+
+def test_sorted_enabled_paces_grouped_by_distance():
+    state = AppState()
+    state.disable_all_paces()
+    state.set_pace_enabled("Threshold", "Mile", True)
+    state.set_pace_enabled("Easy", "1000m", True)
+    state.set_pace_enabled("Easy", "Mile", True)
+    state.group_by = GroupBy.DISTANCE
+
+    ordered = state.sorted_enabled_paces()
+
+    # Mile (first in DISPLAY_DISTANCES_KM) sorts before 1000m; within a
+    # distance, Easy (lower intensity) sorts before Threshold.
+    assert ordered == [("Easy", "Mile"), ("Threshold", "Mile"), ("Easy", "1000m")]

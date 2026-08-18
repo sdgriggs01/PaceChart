@@ -14,9 +14,10 @@ import queue
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from pacechart.app_state import AppState, PaceKey
+from pacechart import templates as pace_templates
+from pacechart.app_state import AppState, GroupBy, PaceKey
 from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES, format_minutes, output_decimals_for
 from pacechart.models import GENDER_LABELS, Gender, RaceResult
 from pacechart.pdf import fits_one_page, generate_pdf
@@ -47,6 +48,8 @@ def _configure_style(root: tk.Tk) -> None:
     style.configure("TFrame", background=BACKGROUND)
     style.configure("TLabel", background=BACKGROUND)
     style.configure("TCheckbutton", background=BACKGROUND)
+    style.configure("TRadiobutton", background=BACKGROUND)
+    style.configure("TCombobox", fieldbackground=BACKGROUND)
 
     style.configure("TButton", background=SCHOOL_GREEN, foreground=BACKGROUND, padding=5)
     style.map(
@@ -192,6 +195,19 @@ class App(ttk.Frame):
         self.status_var = tk.StringVar(value="Not loaded")
         ttk.Label(bar, textvariable=self.status_var).pack(side="left", padx=10)
 
+        group_by_frame = ttk.Frame(bar)
+        group_by_frame.pack(side="left", padx=10)
+        ttk.Label(group_by_frame, text="Group by:").pack(side="left")
+        self.group_by_var = tk.StringVar(value=self.state.group_by.value)
+        for group_by in GroupBy:
+            ttk.Radiobutton(
+                group_by_frame,
+                text=group_by.value.capitalize(),
+                value=group_by.value,
+                variable=self.group_by_var,
+                command=self._on_group_by_changed,
+            ).pack(side="left")
+
         self.generate_pdf_button = ttk.Button(bar, text="Generate PDF", command=self._on_generate_pdf)
         self.generate_pdf_button.pack(side="right", padx=4)
         Tooltip(self.generate_pdf_button, "Press Calc first.")
@@ -217,6 +233,11 @@ class App(ttk.Frame):
             (self.generate_pdf_button, has_computed),
         ):
             button.state(["!disabled"] if enabled else ["disabled"])
+
+    def _on_group_by_changed(self) -> None:
+        self.state.group_by = GroupBy(self.group_by_var.get())
+        if self.state.computed_paces:
+            self._rebuild_output_grid()
 
     # --- notebook / tabs -----------------------------------------------------
 
@@ -247,6 +268,18 @@ class App(ttk.Frame):
         controls.grid(row=0, column=0, columnspan=len(distances) + 1, sticky="w", pady=(0, 6))
         ttk.Button(controls, text="Select All", command=self._on_select_all_paces).pack(side="left")
         ttk.Button(controls, text="Select None", command=self._on_select_none_paces).pack(side="left", padx=4)
+
+        ttk.Separator(controls, orient="vertical").pack(side="left", fill="y", padx=8)
+        ttk.Label(controls, text="Template:").pack(side="left")
+        self.template_var = tk.StringVar()
+        self.template_combo = ttk.Combobox(
+            controls, textvariable=self.template_var, state="readonly", width=20
+        )
+        self.template_combo.pack(side="left", padx=4)
+        ttk.Button(controls, text="Save As...", command=self._on_save_template).pack(side="left", padx=2)
+        ttk.Button(controls, text="Load", command=self._on_load_template).pack(side="left", padx=2)
+        ttk.Button(controls, text="Delete", command=self._on_delete_template).pack(side="left", padx=2)
+        self._refresh_template_list()
 
         for col, dist in enumerate(distances, start=1):
             ttk.Button(
@@ -291,6 +324,54 @@ class App(ttk.Frame):
         self.state.disable_all_paces()
         for var in self._pace_vars.values():
             var.set(False)
+
+    # --- pace templates (persisted to app data) -------------------------------
+
+    def _refresh_template_list(self, select: str | None = None) -> None:
+        names = pace_templates.list_templates()
+        self.template_combo["values"] = names
+        if select is not None and select in names:
+            self.template_var.set(select)
+        elif self.template_var.get() not in names:
+            self.template_var.set("")
+
+    def _on_save_template(self) -> None:
+        name = simpledialog.askstring("Save Template", "Template name:", parent=self.master)
+        if not name:
+            return
+        try:
+            pace_templates.save_template(name, self.state.enabled_paces)
+        except ValueError as exc:
+            messagebox.showerror("Save Template", str(exc))
+            return
+        self._refresh_template_list(select=name)
+
+    def _on_load_template(self) -> None:
+        name = self.template_var.get()
+        if not name:
+            messagebox.showinfo("Load Template", "Select a template first.")
+            return
+        try:
+            self.state.enabled_paces = pace_templates.load_template(name)
+        except KeyError as exc:
+            messagebox.showerror("Load Template", str(exc))
+            return
+        for key, var in self._pace_vars.items():
+            var.set(key in self.state.enabled_paces)
+
+    def _on_delete_template(self) -> None:
+        name = self.template_var.get()
+        if not name:
+            messagebox.showinfo("Delete Template", "Select a template first.")
+            return
+        if not messagebox.askyesno("Delete Template", f'Delete template "{name}"?'):
+            return
+        try:
+            pace_templates.delete_template(name)
+        except KeyError as exc:
+            messagebox.showerror("Delete Template", str(exc))
+            return
+        self._refresh_template_list()
 
     # --- data loading (background thread) ------------------------------------
 
@@ -395,8 +476,7 @@ class App(ttk.Frame):
         if not fits_one_page(self.state):
             proceed = messagebox.askyesno(
                 "Wide table",
-                "The selected paces won't fit on one page width-wise and will "
-                "wrap onto extra pages. Continue anyway?",
+                "The selected paces are too wide to fit one page even in landscape. Continue anyway?",
                 icon="warning",
             )
             if not proceed:

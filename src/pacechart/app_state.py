@@ -6,6 +6,7 @@ instance of `AppState`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 
 from pacechart.calculator import DISPLAY_DISTANCES_KM, Performance, TRAINING_ZONES, training_paces
 from pacechart.models import Athlete, Gender, average_5k_equivalent
@@ -18,6 +19,13 @@ def all_pace_keys() -> set[PaceKey]:
     return {(zone, dist) for zone in TRAINING_ZONES for dist in DISPLAY_DISTANCES_KM}
 
 
+class GroupBy(Enum):
+    """How the Output tab and PDF order their pace columns."""
+
+    ZONE = "zone"
+    DISTANCE = "distance"
+
+
 @dataclass
 class AppState:
     athletes: dict[int, Athlete] = field(default_factory=dict)
@@ -27,6 +35,11 @@ class AppState:
     # Defaults to everything enabled (Design.md: "the full set available...
     # the user enables/disables individual ... combinations").
     enabled_paces: set[PaceKey] = field(default_factory=all_pace_keys)
+
+    # Column ordering for the Output tab and PDF: group primarily by zone
+    # (all distances for "Easy" together, etc.) or primarily by distance
+    # (all zones for "Mile" together, etc.).
+    group_by: GroupBy = GroupBy.ZONE
 
     # Populated by calculate(). None means "no selected results".
     computed_performance: dict[int, Performance | None] = field(default_factory=dict)
@@ -91,12 +104,17 @@ class AppState:
             self.enabled_paces.discard(key)
 
     def sorted_enabled_paces(self) -> list[PaceKey]:
-        """Enabled (zone, distance) pairs in methodology order (zone by
-        increasing intensity, distance from Mile down to 200m) — the
-        column order used by both the GUI's Output tab and the PDF report."""
+        """Enabled (zone, distance) pairs in display order — the column
+        order used by both the GUI's Output tab and the PDF report.
+        Zones are always ordered by increasing intensity and distances
+        from Mile down to 200m; `group_by` picks which is primary."""
         zone_order = list(TRAINING_ZONES)
         dist_order = list(DISPLAY_DISTANCES_KM)
-        return sorted(self.enabled_paces, key=lambda k: (zone_order.index(k[0]), dist_order.index(k[1])))
+        if self.group_by is GroupBy.DISTANCE:
+            key = lambda k: (dist_order.index(k[1]), zone_order.index(k[0]))
+        else:
+            key = lambda k: (zone_order.index(k[0]), dist_order.index(k[1]))
+        return sorted(self.enabled_paces, key=key)
 
     def calculate(self) -> None:
         """Design.md workflow steps 3-4: average each athlete's selected

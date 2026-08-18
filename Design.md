@@ -17,10 +17,12 @@
   - Zones (in increasing intensity): Very Easy (58%), Easy (66%), Moderate (74%), Tempo (82%), Threshold (87%), CV (90%), AP (95%), V.O2 max (100%), 110%, 120%, 130%
   - Distances: Mile, 1600m, 1200m, 1000m, 800m, 600m, 400m, 300m, 200m
   - The user enables/disables individual zone × distance combinations for the PDF output (see workflow step 2).
+- **Pace templates**: the current zone × distance selection can be saved, under a name, to a JSON file in the user's app data directory (`%APPDATA%\PaceChart\templates.json`), and reloaded later — so a coach doesn't have to re-check the same 15 boxes every week. Saving under an existing name overwrites it. Templates can also be deleted.
+- **Output grouping**: the Output tab and PDF's pace columns can be ordered either grouped by zone (all distances for "Easy" together, then all distances for "Tempo", etc. — the default) or grouped by distance (all zones for "Mile" together, then all zones for "1600m", etc.). This only changes column order, not which paces are included.
 
 ## User Workflow
  1. The application will generate a table where the rows are athletes & the columns are meets with results. If an athlete has no result for that meet, the cell is blank. If there is a result, the cell will have a checkbox (unchecked). There will be a quick action button that will select the most recent result for each athlete. A user can check or uncheck any result
- 2. There will be a list of paces, drawn from the full zone × distance set defined above, that can be enabled or disabled
+ 2. There will be a list of paces, drawn from the full zone × distance set defined above, that can be enabled or disabled. A previously saved template can be loaded to set this list in one step, or the current list can be saved as a new (or overwritten) template.
  3. When the user presses "Calc": for each athlete, every selected result is converted to a 5000m-equivalent time using the 5k-equivalent conversion above, then those converted times are averaged to produce one 5k value per athlete. An athlete with no selected results gets no calculated 5k value.
- 4. Then using the calculated 5k value, all enabled training paces are generated. Athletes with no calculated 5k value are skipped (no paces to generate).
+ 4. Then using the calculated 5k value, all enabled training paces are generated. Athletes with no calculated 5k value are skipped (no paces to generate). The user's zone/distance grouping choice determines the column order of the result.
  5. A PDF table is created where each athlete has a row, with their paces listed. Athletes with no calculated 5k value still get a row, with blank pace cells.

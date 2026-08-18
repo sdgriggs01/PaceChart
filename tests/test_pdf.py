@@ -13,7 +13,15 @@ import pytest
 
 from pacechart.app_state import AppState
 from pacechart.models import Athlete, Gender, Meet, RaceResult
-from pacechart.pdf import estimated_table_width_pt, fits_one_page, generate_pdf, usable_page_width_pt
+from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES
+from pacechart.pdf import (
+    estimated_table_width_pt,
+    fits_one_page,
+    fits_portrait,
+    generate_pdf,
+    needs_split_tables,
+    usable_page_width_pt,
+)
 
 
 def make_meet(name="Meet", day=1) -> Meet:
@@ -89,6 +97,74 @@ def test_estimated_table_width_grows_with_more_enabled_paces():
 
     assert full_width > empty_width
     assert usable_page_width_pt() > 0
+
+
+def _enable_n_paces(state: AppState, n: int) -> None:
+    state.disable_all_paces()
+    keys = [(zone, dist) for zone in TRAINING_ZONES for dist in DISPLAY_DISTANCES_KM]
+    for zone, dist in keys[:n]:
+        state.set_pace_enabled(zone, dist, True)
+
+
+def test_generate_pdf_uses_portrait_when_selection_fits(tmp_path: Path):
+    from pypdf import PdfReader
+
+    state = build_state()
+    _enable_n_paces(state, 2)
+    assert fits_portrait(state)
+    output_path = tmp_path / "portrait.pdf"
+
+    generate_pdf(state, str(output_path))
+
+    page = PdfReader(str(output_path)).pages[0]
+    box = page.mediabox
+    assert float(box.width) < float(box.height)
+
+
+def test_generate_pdf_switches_to_landscape_when_portrait_is_too_narrow(tmp_path: Path):
+    from pypdf import PdfReader
+
+    state = build_state()
+    _enable_n_paces(state, 7)  # crosses the portrait width threshold but fits landscape
+    assert not fits_portrait(state)
+    assert fits_one_page(state)
+    output_path = tmp_path / "landscape.pdf"
+
+    generate_pdf(state, str(output_path))
+
+    page = PdfReader(str(output_path)).pages[0]
+    box = page.mediabox
+    assert float(box.width) > float(box.height)
+
+
+def test_generate_pdf_splits_into_two_tables_when_too_wide_for_landscape(tmp_path: Path):
+    from pypdf import PdfReader
+
+    state = build_state()
+    _enable_n_paces(state, 10)  # crosses the landscape width threshold too
+    assert not fits_portrait(state)
+    assert needs_split_tables(state)
+    assert fits_one_page(state)  # still handled -- via the two-table split
+    output_path = tmp_path / "split.pdf"
+
+    generate_pdf(state, str(output_path))
+
+    reader = PdfReader(str(output_path))
+    # One page per split table per gender: boys' first half, boys' second
+    # half, girls' first half, girls' second half.
+    assert len(reader.pages) == 4
+
+    boys_page_1 = reader.pages[0].extract_text()
+    boys_page_2 = reader.pages[1].extract_text()
+    girls_page_1 = reader.pages[2].extract_text()
+
+    # The new (second) table falls on its own page, and the athlete name
+    # "carries over" onto it.
+    assert "Bob Smith" in boys_page_1
+    assert "Bob Smith" in boys_page_2
+    assert "Gina Jones" not in boys_page_1
+    assert "Gina Jones" not in boys_page_2
+    assert "Gina Jones" in girls_page_1
 
 
 def test_generate_pdf_footer_contains_the_export_timestamp(tmp_path: Path):

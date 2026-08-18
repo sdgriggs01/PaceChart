@@ -20,6 +20,10 @@ class Gender(Enum):
     GIRLS = "girls"
 
 
+# Display abbreviation shared by the GUI's Output tab and the PDF report.
+GENDER_LABELS = {Gender.BOYS: "M", Gender.GIRLS: "F"}
+
+
 @dataclass(frozen=True)
 class Meet:
     """A cross-country meet, as listed on the schedule page."""

@@ -13,25 +13,15 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from pacechart.app_state import AppState, PaceKey
-from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES, format_minutes
-from pacechart.models import Gender, RaceResult
+from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES, format_minutes, output_decimals_for
+from pacechart.models import GENDER_LABELS, Gender, RaceResult
+from pacechart.pdf import fits_one_page, generate_pdf
 from pacechart.scraper import attach_results, fetch_meet_results, fetch_roster, fetch_schedule
 
 _BOLD = ("TkDefaultFont", 9, "bold")
-
-GENDER_LABELS = {Gender.BOYS: "M", Gender.GIRLS: "F"}
-
-# Output-pane display precision: 400m and under round to the nearest
-# tenth of a second (short splits are meaningfully paced to fractions),
-# longer distances round to the nearest whole second.
-SHORT_DISTANCE_KM_THRESHOLD = 0.4
-
-
-def _output_decimals_for(distance_label: str) -> int:
-    return 1 if DISPLAY_DISTANCES_KM[distance_label] <= SHORT_DISTANCE_KM_THRESHOLD else 0
 
 
 class ScrollableFrame(ttk.Frame):
@@ -70,6 +60,42 @@ class ScrollableFrame(ttk.Frame):
         return content_bottom > self.canvas.winfo_height()
 
 
+class Tooltip:
+    """Hover tooltip shown only while its widget is in the ttk "disabled"
+    state — used to explain why a button can't be pressed right now."""
+
+    def __init__(self, widget: tk.Widget, text: str) -> None:
+        self.widget = widget
+        self.text = text
+        self._popup: tk.Toplevel | None = None
+        widget.bind("<Enter>", self._on_enter, add="+")
+        widget.bind("<Leave>", self._on_leave, add="+")
+
+    def _on_enter(self, event: tk.Event) -> None:
+        if "disabled" not in self.widget.state():
+            return
+        self._popup = tk.Toplevel(self.widget)
+        self._popup.wm_overrideredirect(True)
+        x = self.widget.winfo_rootx() + 10
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+        self._popup.wm_geometry(f"+{x}+{y}")
+        tk.Label(
+            self._popup,
+            text=self.text,
+            background="#ffffe0",
+            relief="solid",
+            borderwidth=1,
+            font=("TkDefaultFont", 8),
+            padx=4,
+            pady=2,
+        ).pack()
+
+    def _on_leave(self, event: tk.Event) -> None:
+        if self._popup is not None:
+            self._popup.destroy()
+            self._popup = None
+
+
 class App(ttk.Frame):
     def __init__(self, master: tk.Tk) -> None:
         super().__init__(master)
@@ -100,12 +126,36 @@ class App(ttk.Frame):
 
         self.load_button = ttk.Button(bar, text="Load Data", command=self._on_load_clicked)
         self.load_button.pack(side="left")
+        Tooltip(self.load_button, "A load is already in progress.")
 
         self.status_var = tk.StringVar(value="Not loaded")
         ttk.Label(bar, textvariable=self.status_var).pack(side="left", padx=10)
 
-        ttk.Button(bar, text="Calc", command=self._on_calc).pack(side="right", padx=4)
-        ttk.Button(bar, text="Select Most Recent", command=self._on_select_most_recent).pack(side="right", padx=4)
+        self.generate_pdf_button = ttk.Button(bar, text="Generate PDF", command=self._on_generate_pdf)
+        self.generate_pdf_button.pack(side="right", padx=4)
+        Tooltip(self.generate_pdf_button, "Press Calc first.")
+
+        self.calc_button = ttk.Button(bar, text="Calc", command=self._on_calc)
+        self.calc_button.pack(side="right", padx=4)
+        Tooltip(self.calc_button, "Load data first.")
+
+        self.select_most_recent_button = ttk.Button(
+            bar, text="Select Most Recent", command=self._on_select_most_recent
+        )
+        self.select_most_recent_button.pack(side="right", padx=4)
+        Tooltip(self.select_most_recent_button, "Load data first.")
+
+        self._update_button_states()
+
+    def _update_button_states(self) -> None:
+        has_athletes = bool(self.state.athletes)
+        has_computed = bool(self.state.computed_paces)
+        for button, enabled in (
+            (self.calc_button, has_athletes),
+            (self.select_most_recent_button, has_athletes),
+            (self.generate_pdf_button, has_computed),
+        ):
+            button.state(["!disabled"] if enabled else ["disabled"])
 
     # --- notebook / tabs -----------------------------------------------------
 
@@ -221,6 +271,7 @@ class App(ttk.Frame):
                     self.status_var.set(f"Loaded {len(athletes)} athletes, {len(scheduled_meets)} meets.")
                     self.load_button.state(["!disabled"])
                     self._rebuild_results_grids()
+                    self._update_button_states()
                 elif kind == "error":
                     self.status_var.set("Load failed.")
                     self.load_button.state(["!disabled"])
@@ -272,24 +323,44 @@ class App(ttk.Frame):
     # --- calc / output -----------------------------------------------------------
 
     def _on_calc(self) -> None:
-        if not self.state.athletes:
-            messagebox.showinfo("Calc", "Load data first.")
-            return
         self.state.calculate()
         self._rebuild_output_grid()
+        self._update_button_states()
         self.notebook.select(self.output_tab)
+
+    def _on_generate_pdf(self) -> None:
+        if not fits_one_page(self.state):
+            proceed = messagebox.askyesno(
+                "Wide table",
+                "The selected paces won't fit on one page width-wise and will "
+                "wrap onto extra pages. Continue anyway?",
+                icon="warning",
+            )
+            if not proceed:
+                return
+
+        output_path = filedialog.asksaveasfilename(
+            title="Save PDF",
+            defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf")],
+        )
+        if not output_path:
+            return
+
+        try:
+            generate_pdf(self.state, output_path)
+        except Exception as exc:
+            messagebox.showerror("Generate PDF failed", str(exc))
+            return
+
+        messagebox.showinfo("Generate PDF", f"Saved to {output_path}")
 
     def _rebuild_output_grid(self) -> None:
         body = self.output_tab.body
         for widget in body.winfo_children():
             widget.destroy()
 
-        zone_order = list(TRAINING_ZONES)
-        dist_order = list(DISPLAY_DISTANCES_KM)
-        pace_keys = sorted(
-            self.state.enabled_paces,
-            key=lambda k: (zone_order.index(k[0]), dist_order.index(k[1])),
-        )
+        pace_keys = self.state.sorted_enabled_paces()
 
         for gender in (Gender.BOYS, Gender.GIRLS):
             section = ttk.Frame(body)
@@ -314,7 +385,7 @@ class App(ttk.Frame):
             paces = self.state.computed_paces.get(athlete_id)
             for col, key in enumerate(pace_keys, start=2):
                 zone, dist = key
-                text = format_minutes(paces[key], decimals=_output_decimals_for(dist)) if paces else ""
+                text = format_minutes(paces[key], decimals=output_decimals_for(dist)) if paces else ""
                 ttk.Label(section, text=text).grid(row=row, column=col, padx=4)
 
 

@@ -90,6 +90,14 @@ class AppState:
         else:
             self.enabled_paces.discard(key)
 
+    def sorted_enabled_paces(self) -> list[PaceKey]:
+        """Enabled (zone, distance) pairs in methodology order (zone by
+        increasing intensity, distance from Mile down to 200m) — the
+        column order used by both the GUI's Output tab and the PDF report."""
+        zone_order = list(TRAINING_ZONES)
+        dist_order = list(DISPLAY_DISTANCES_KM)
+        return sorted(self.enabled_paces, key=lambda k: (zone_order.index(k[0]), dist_order.index(k[1])))
+
     def calculate(self) -> None:
         """Design.md workflow steps 3-4: average each athlete's selected
         results into a 5k-equivalent performance, then generate every

@@ -265,3 +265,13 @@ def format_minutes(total_minutes: float, decimals: int = 2) -> str:
     if hours > 0:
         return f"{hours}:{minutes:02d}:{seconds_str}"
     return f"{minutes}:{seconds_str}"
+
+
+# Output display precision, shared by the GUI's Output tab and the PDF
+# report: 400m and under round to the nearest tenth of a second, longer
+# distances round to the nearest whole second.
+SHORT_DISTANCE_KM_THRESHOLD = 0.4
+
+
+def output_decimals_for(distance_label: str) -> int:
+    return 1 if DISPLAY_DISTANCES_KM[distance_label] <= SHORT_DISTANCE_KM_THRESHOLD else 0

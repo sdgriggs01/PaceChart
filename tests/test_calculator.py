@@ -160,3 +160,23 @@ def test_training_paces_faster_zones_are_faster():
 )
 def test_format_minutes(minutes, expected):
     assert format_minutes(minutes) == expected
+
+
+@pytest.mark.parametrize(
+    "minutes,decimals,expected",
+    [
+        (4.0, 0, "4:00"),
+        (4.0, 1, "4:00.0"),
+        (65.5, 0, "1:05:30"),
+        (0.5, 1, "0:30.0"),
+    ],
+)
+def test_format_minutes_with_explicit_decimals(minutes, decimals, expected):
+    assert format_minutes(minutes, decimals=decimals) == expected
+
+
+def test_format_minutes_rounds_seconds_before_splitting_to_avoid_60s_carry():
+    # 59.96s at 1 decimal rounds to 60.0s, which must carry into the next
+    # minute rather than displaying the unrepresentable "0:60.0".
+    minutes = 59.96 / 60.0
+    assert format_minutes(minutes, decimals=1) == "1:00.0"

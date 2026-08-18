@@ -24,33 +24,50 @@ _BOLD = ("TkDefaultFont", 9, "bold")
 
 GENDER_LABELS = {Gender.BOYS: "M", Gender.GIRLS: "F"}
 
+# Output-pane display precision: 400m and under round to the nearest
+# tenth of a second (short splits are meaningfully paced to fractions),
+# longer distances round to the nearest whole second.
+SHORT_DISTANCE_KM_THRESHOLD = 0.4
+
+
+def _output_decimals_for(distance_label: str) -> int:
+    return 1 if DISPLAY_DISTANCES_KM[distance_label] <= SHORT_DISTANCE_KM_THRESHOLD else 0
+
 
 class ScrollableFrame(ttk.Frame):
-    """A Frame with vertical + horizontal scrollbars and mousewheel support.
-    Put content in `.body`, not in the ScrollableFrame itself."""
+    """A Frame with vertical + horizontal scrollbars. Put content in
+    `.body`, not in the ScrollableFrame itself. Mousewheel scrolling is
+    wired up globally by App (see `_on_mousewheel`), not per-instance —
+    binding/unbinding on <Enter>/<Leave> is unreliable: those only fire
+    on pointer-crossing events, so a tab that appears under an
+    already-stationary cursor (e.g. right after startup) never arms it."""
 
     def __init__(self, master: tk.Widget, **kwargs) -> None:
         super().__init__(master, **kwargs)
-        canvas = tk.Canvas(self, highlightthickness=0)
-        vbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
-        hbar = ttk.Scrollbar(self, orient="horizontal", command=canvas.xview)
-        self.body = ttk.Frame(canvas)
+        self.canvas = tk.Canvas(self, highlightthickness=0)
+        vbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        hbar = ttk.Scrollbar(self, orient="horizontal", command=self.canvas.xview)
+        self.body = ttk.Frame(self.canvas)
 
-        self.body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=self.body, anchor="nw")
-        canvas.configure(yscrollcommand=vbar.set, xscrollcommand=hbar.set)
+        self.body.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.canvas.create_window((0, 0), window=self.body, anchor="nw")
+        self.canvas.configure(yscrollcommand=vbar.set, xscrollcommand=hbar.set)
 
-        canvas.grid(row=0, column=0, sticky="nsew")
+        self.canvas.grid(row=0, column=0, sticky="nsew")
         vbar.grid(row=0, column=1, sticky="ns")
         hbar.grid(row=1, column=0, sticky="ew")
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
 
-        def scroll(event: tk.Event) -> None:
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", scroll))
-        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+    def content_overflows_viewport(self) -> bool:
+        """False when `.body` fits entirely within the visible canvas area
+        — canvas.yview_scroll doesn't clamp to that on its own, so callers
+        must skip scrolling themselves to avoid scrolling into blank space."""
+        bbox = self.canvas.bbox("all")
+        if bbox is None:
+            return False
+        _, _, _, content_bottom = bbox
+        return content_bottom > self.canvas.winfo_height()
 
 
 class App(ttk.Frame):
@@ -65,7 +82,15 @@ class App(ttk.Frame):
         self.pack(fill="both", expand=True)
         self._build_controls()
         self._build_notebook()
+        self.master.bind_all("<MouseWheel>", self._on_mousewheel)
         self.master.after(100, self._poll_queue)
+
+    def _on_mousewheel(self, event: tk.Event) -> None:
+        # Route the wheel to whichever tab is currently visible, rather
+        # than relying on per-widget Enter/Leave binding (see ScrollableFrame).
+        current = self.notebook.nametowidget(self.notebook.select())
+        if isinstance(current, ScrollableFrame) and current.content_overflows_viewport():
+            current.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     # --- top control bar ---------------------------------------------------
 
@@ -207,6 +232,7 @@ class App(ttk.Frame):
             for col, scheduled in enumerate(meets, start=1):
                 result = results_by_meet.get(scheduled.meet)
                 if result is None:
+                    tk.Label(body, background="#b0b0b0").grid(row=row, column=col, sticky="nsew", padx=1, pady=1)
                     continue
                 var = tk.BooleanVar(value=result.selected)
                 self._result_vars.append(var)
@@ -248,27 +274,27 @@ class App(ttk.Frame):
         for gender in (Gender.BOYS, Gender.GIRLS):
             section = ttk.Frame(body)
             section.pack(anchor="w", fill="x", pady=(0, 16))
-            ttk.Label(section, text=GENDER_LABELS[gender], font=("TkDefaultFont", 11, "bold")).grid(
-                row=0, column=0, columnspan=len(pace_keys) + 1, sticky="w", pady=(0, 4)
-            )
             self._build_output_table(section, gender, pace_keys)
 
     def _build_output_table(self, section: ttk.Frame, gender: Gender, pace_keys: list[PaceKey]) -> None:
-        ttk.Label(section, text="Athlete", font=_BOLD).grid(row=1, column=0, sticky="w")
-        for col, (zone, dist) in enumerate(pace_keys, start=1):
+        ttk.Label(section, text="Athlete", font=_BOLD).grid(row=0, column=0, sticky="w")
+        ttk.Label(section, text="Gender", font=_BOLD).grid(row=0, column=1, sticky="w")
+        for col, (zone, dist) in enumerate(pace_keys, start=2):
             ttk.Label(section, text=f"{zone}\n{dist}", font=("TkDefaultFont", 8, "bold"), justify="center").grid(
-                row=1, column=col, padx=4
+                row=0, column=col, padx=4
             )
 
         entries = sorted(
             (kv for kv in self.state.athletes.items() if kv[1].gender is gender),
             key=lambda kv: kv[1].name,
         )
-        for row, (athlete_id, athlete) in enumerate(entries, start=2):
+        for row, (athlete_id, athlete) in enumerate(entries, start=1):
             ttk.Label(section, text=athlete.name).grid(row=row, column=0, sticky="w")
+            ttk.Label(section, text=GENDER_LABELS[athlete.gender]).grid(row=row, column=1, sticky="w")
             paces = self.state.computed_paces.get(athlete_id)
-            for col, key in enumerate(pace_keys, start=1):
-                text = format_minutes(paces[key]) if paces else ""
+            for col, key in enumerate(pace_keys, start=2):
+                zone, dist = key
+                text = format_minutes(paces[key], decimals=_output_decimals_for(dist)) if paces else ""
                 ttk.Label(section, text=text).grid(row=row, column=col, padx=4)
 
 

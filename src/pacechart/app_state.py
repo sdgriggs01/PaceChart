@@ -39,8 +39,17 @@ class AppState:
         )
 
     def meets_with_results_for(self, gender: Gender) -> list[ScheduledMeet]:
-        """Meets that have a posted results link for this gender, in schedule order."""
-        return [sm for sm in self.scheduled_meets if sm.results_url(gender) is not None]
+        """Meets where at least one athlete of this gender has an actual
+        attached result, in schedule order. A posted results link isn't
+        enough by itself (e.g. the linked page might list zero results
+        for our team) — this hides meets with nothing to check off."""
+        meets_with_data = {
+            result.meet
+            for athlete in self.athletes.values()
+            if athlete.gender is gender
+            for result in athlete.results
+        }
+        return [sm for sm in self.scheduled_meets if sm.meet in meets_with_data]
 
     def select_most_recent_all(self) -> None:
         """The workflow's "quick action button": select each athlete's

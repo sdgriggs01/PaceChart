@@ -249,12 +249,19 @@ def training_paces(perf: Performance) -> dict[str, dict[str, float]]:
     return paces
 
 
-def format_minutes(total_minutes: float) -> str:
-    """Format a minutes value as H:MM:SS.ss or M:SS.ss, matching the source page."""
-    total_seconds = total_minutes * 60.0
+def format_minutes(total_minutes: float, decimals: int = 2) -> str:
+    """Format a minutes value as H:MM:SS(.d..) or M:SS(.d..).
+
+    Rounds `total_seconds` before splitting into hours/minutes/seconds so
+    that e.g. 59.96s at decimals=1 carries into "1:00.0" rather than the
+    unrepresentable "0:60.0".
+    """
+    total_seconds = round(total_minutes * 60.0, decimals)
     hours = int(total_seconds // 3600)
     minutes = int((total_seconds % 3600) // 60)
-    seconds = total_seconds % 60
+    seconds = total_seconds - hours * 3600 - minutes * 60
+    width = 2 if decimals == 0 else decimals + 3
+    seconds_str = f"{seconds:0{width}.{decimals}f}"
     if hours > 0:
-        return f"{hours}:{minutes:02d}:{seconds:05.2f}"
-    return f"{minutes}:{seconds:05.2f}"
+        return f"{hours}:{minutes:02d}:{seconds_str}"
+    return f"{minutes}:{seconds_str}"

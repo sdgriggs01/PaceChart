@@ -35,15 +35,37 @@ def test_athletes_by_gender_filters_and_sorts():
     assert state.athletes_by_gender(Gender.GIRLS) == [c]
 
 
-def test_meets_with_results_for_filters_by_gender_link():
-    state = AppState()
-    has_both = ScheduledMeet(meet=make_meet("A", 1), boys_results_url="b", girls_results_url="g")
-    boys_only = ScheduledMeet(meet=make_meet("B", 2), boys_results_url="b", girls_results_url=None)
-    none_yet = ScheduledMeet(meet=make_meet("C", 3), boys_results_url=None, girls_results_url=None)
-    state.scheduled_meets = [has_both, boys_only, none_yet]
+def test_meets_with_results_for_requires_an_actual_attached_result():
+    meet_a = make_meet("A", 1)
+    meet_b = make_meet("B", 2)
+    meet_c = make_meet("C", 3)
+    meet_d = make_meet("D", 4)
+    sm_a = ScheduledMeet(meet=meet_a, boys_results_url="b", girls_results_url="g")
+    sm_b = ScheduledMeet(meet=meet_b, boys_results_url="b", girls_results_url=None)
+    sm_c = ScheduledMeet(meet=meet_c, boys_results_url=None, girls_results_url=None)
+    # Has a posted link, but nobody actually has a result for it (e.g. the
+    # linked page listed zero results for our team) — should still be hidden.
+    sm_d = ScheduledMeet(meet=meet_d, boys_results_url="b", girls_results_url="g")
 
-    assert state.meets_with_results_for(Gender.BOYS) == [has_both, boys_only]
-    assert state.meets_with_results_for(Gender.GIRLS) == [has_both]
+    _, boy = make_athlete(
+        1,
+        "Bob",
+        Gender.BOYS,
+        results=[
+            RaceResult(meet=meet_a, distance_km=5.0, time_seconds=1200),
+            RaceResult(meet=meet_b, distance_km=5.0, time_seconds=1210),
+        ],
+    )
+    _, girl = make_athlete(
+        2,
+        "Gina",
+        Gender.GIRLS,
+        results=[RaceResult(meet=meet_a, distance_km=5.0, time_seconds=1300)],
+    )
+    state = AppState(athletes={1: boy, 2: girl}, scheduled_meets=[sm_a, sm_b, sm_c, sm_d])
+
+    assert state.meets_with_results_for(Gender.BOYS) == [sm_a, sm_b]
+    assert state.meets_with_results_for(Gender.GIRLS) == [sm_a]
 
 
 def test_select_most_recent_all_applies_to_every_athlete():

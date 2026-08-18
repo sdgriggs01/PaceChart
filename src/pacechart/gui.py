@@ -13,6 +13,7 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from pacechart.app_state import AppState, PaceKey
@@ -21,7 +22,66 @@ from pacechart.models import GENDER_LABELS, Gender, RaceResult
 from pacechart.pdf import fits_one_page, generate_pdf
 from pacechart.scraper import attach_results, fetch_meet_results, fetch_roster, fetch_schedule
 
+ASSETS_DIR = Path(__file__).parent / "assets"
+ICON_PATH = ASSETS_DIR / "logo.png"
+
 _BOLD = ("TkDefaultFont", 9, "bold")
+
+# Green Hope school colors (application chrome only — the exported PDF is
+# intentionally left unstyled by these).
+SCHOOL_GREEN = "#005F39"
+SCHOOL_MAROON = "#9E2F3F"
+SCHOOL_GREEN_TINT = "#dcebe4"
+BACKGROUND = "#ffffff"
+
+
+def _configure_style(root: tk.Tk) -> None:
+    style = ttk.Style(root)
+    # "clam" is the ttk theme that reliably honors background/foreground
+    # color configuration cross-platform; the native Windows themes ignore
+    # most of it.
+    style.theme_use("clam")
+
+    root.configure(background=BACKGROUND)
+    style.configure(".", background=BACKGROUND)
+    style.configure("TFrame", background=BACKGROUND)
+    style.configure("TLabel", background=BACKGROUND)
+    style.configure("TCheckbutton", background=BACKGROUND)
+
+    style.configure("TButton", background=SCHOOL_GREEN, foreground=BACKGROUND, padding=5)
+    style.map(
+        "TButton",
+        background=[("disabled", "#cccccc"), ("active", SCHOOL_MAROON)],
+        foreground=[("disabled", "#888888")],
+    )
+
+    style.configure("PaceHeader.TButton", background=SCHOOL_MAROON, foreground=BACKGROUND, padding=3)
+    style.map(
+        "PaceHeader.TButton",
+        background=[("disabled", "#cccccc"), ("active", SCHOOL_GREEN)],
+        foreground=[("disabled", "#888888")],
+    )
+
+    style.configure("Header.TLabel", background=SCHOOL_GREEN, foreground=BACKGROUND, font=_BOLD, padding=3)
+    style.configure(
+        "SmallHeader.TLabel",
+        background=SCHOOL_GREEN,
+        foreground=BACKGROUND,
+        font=("TkDefaultFont", 8, "bold"),
+        padding=2,
+    )
+
+    style.configure("TNotebook", background=BACKGROUND, borderwidth=0)
+    style.configure(
+        "TNotebook.Tab", background=SCHOOL_GREEN_TINT, foreground=SCHOOL_GREEN, padding=(12, 6), font=_BOLD
+    )
+    style.map(
+        "TNotebook.Tab",
+        background=[("selected", SCHOOL_MAROON)],
+        foreground=[("selected", BACKGROUND)],
+    )
+
+    style.configure("TScrollbar", background=SCHOOL_GREEN_TINT, troughcolor=BACKGROUND)
 
 
 class ScrollableFrame(ttk.Frame):
@@ -98,6 +158,7 @@ class Tooltip:
 
 class App(ttk.Frame):
     def __init__(self, master: tk.Tk) -> None:
+        _configure_style(master)
         super().__init__(master)
         self.master = master
         self.state = AppState()
@@ -188,14 +249,14 @@ class App(ttk.Frame):
         ttk.Button(controls, text="Select None", command=self._on_select_none_paces).pack(side="left", padx=4)
 
         for col, dist in enumerate(distances, start=1):
-            ttk.Button(body, text=dist, command=lambda d=dist: self._on_select_distance(d)).grid(
-                row=1, column=col, padx=4, sticky="ew"
-            )
+            ttk.Button(
+                body, text=dist, style="PaceHeader.TButton", command=lambda d=dist: self._on_select_distance(d)
+            ).grid(row=1, column=col, padx=1, sticky="ew")
 
         for row, zone in enumerate(TRAINING_ZONES, start=2):
-            ttk.Button(body, text=zone, command=lambda z=zone: self._on_select_zone(z)).grid(
-                row=row, column=0, sticky="ew"
-            )
+            ttk.Button(
+                body, text=zone, style="PaceHeader.TButton", command=lambda z=zone: self._on_select_zone(z)
+            ).grid(row=row, column=0, sticky="ew")
             for col, dist in enumerate(distances, start=1):
                 var = tk.BooleanVar(value=(zone, dist) in self.state.enabled_paces)
                 self._pace_vars[(zone, dist)] = var
@@ -293,9 +354,11 @@ class App(ttk.Frame):
         meets = self.state.meets_with_results_for(gender)
         athletes = self.state.athletes_by_gender(gender)
 
-        ttk.Label(body, text="Athlete", font=_BOLD).grid(row=0, column=0, sticky="w")
+        ttk.Label(body, text="Athlete", style="Header.TLabel").grid(row=0, column=0, sticky="nsew")
         for col, scheduled in enumerate(meets, start=1):
-            ttk.Label(body, text=scheduled.meet.name, font=_BOLD, wraplength=100).grid(row=0, column=col, padx=4)
+            ttk.Label(body, text=scheduled.meet.name, style="Header.TLabel", wraplength=100).grid(
+                row=0, column=col, padx=1, sticky="nsew"
+            )
 
         for row, athlete in enumerate(athletes, start=1):
             ttk.Label(body, text=athlete.name).grid(row=row, column=0, sticky="w")
@@ -368,11 +431,11 @@ class App(ttk.Frame):
             self._build_output_table(section, gender, pace_keys)
 
     def _build_output_table(self, section: ttk.Frame, gender: Gender, pace_keys: list[PaceKey]) -> None:
-        ttk.Label(section, text="Athlete", font=_BOLD).grid(row=0, column=0, sticky="w")
-        ttk.Label(section, text="Gender", font=_BOLD).grid(row=0, column=1, sticky="w")
+        ttk.Label(section, text="Athlete", style="Header.TLabel").grid(row=0, column=0, sticky="nsew")
+        ttk.Label(section, text="Gender", style="Header.TLabel").grid(row=0, column=1, sticky="nsew")
         for col, (zone, dist) in enumerate(pace_keys, start=2):
-            ttk.Label(section, text=f"{zone}\n{dist}", font=("TkDefaultFont", 8, "bold"), justify="center").grid(
-                row=0, column=col, padx=4
+            ttk.Label(section, text=f"{zone}\n{dist}", style="SmallHeader.TLabel", justify="center").grid(
+                row=0, column=col, padx=1, sticky="nsew"
             )
 
         entries = sorted(
@@ -393,6 +456,10 @@ def main() -> None:
     root = tk.Tk()
     root.title("PaceChart")
     root.geometry("1100x700")
+    if ICON_PATH.exists():
+        icon = tk.PhotoImage(file=str(ICON_PATH))
+        root.iconphoto(True, icon)
+        root._icon_image = icon  # keep a reference alive; PhotoImage has no other owner
     App(root)
     root.mainloop()
 

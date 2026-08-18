@@ -79,7 +79,7 @@ def _build_rows(state: AppState, gender: Gender, pace_keys: list[PaceKey]) -> li
 
 
 def _table_from_rows(rows: list[list[str]]) -> Table:
-    table = Table(rows, repeatRows=1)
+    table = Table(rows, repeatRows=1, hAlign="LEFT")
     table.setStyle(
         TableStyle(
             [

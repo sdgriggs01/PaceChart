@@ -5,6 +5,7 @@ from datetime import date
 import pytest
 
 from pacechart.app_state import AppState, all_pace_keys
+from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES
 from pacechart.models import Athlete, Gender, Meet, RaceResult
 from pacechart.scraper import ScheduledMeet
 
@@ -95,6 +96,70 @@ def test_set_pace_enabled_toggles_single_combination():
 
     state.set_pace_enabled("Threshold", "1000m", True)
     assert ("Threshold", "1000m") in state.enabled_paces
+
+
+def test_toggle_paces_for_distance_enables_every_zone_at_that_distance_when_not_full():
+    state = AppState()
+    state.disable_all_paces()
+
+    state.toggle_paces_for_distance("1000m")
+
+    assert state.enabled_paces == {(zone, "1000m") for zone in TRAINING_ZONES}
+
+
+def test_toggle_paces_for_distance_only_adds_does_not_remove_others():
+    state = AppState()
+    state.disable_all_paces()
+    state.set_pace_enabled("Easy", "Mile", True)
+
+    state.toggle_paces_for_distance("1000m")
+
+    assert ("Easy", "Mile") in state.enabled_paces
+    assert {(zone, "1000m") for zone in TRAINING_ZONES} <= state.enabled_paces
+
+
+def test_toggle_paces_for_distance_clears_when_column_fully_selected():
+    state = AppState()
+    state.disable_all_paces()
+    state.set_pace_enabled("Easy", "Mile", True)  # unrelated selection, should survive
+    state.toggle_paces_for_distance("1000m")  # fully selects the 1000m column
+
+    state.toggle_paces_for_distance("1000m")  # click again -> should clear it
+
+    assert not any(dist == "1000m" for _, dist in state.enabled_paces)
+    assert ("Easy", "Mile") in state.enabled_paces
+
+
+def test_toggle_paces_for_zone_enables_every_distance_at_that_zone_when_not_full():
+    state = AppState()
+    state.disable_all_paces()
+
+    state.toggle_paces_for_zone("Threshold")
+
+    assert state.enabled_paces == {("Threshold", dist) for dist in DISPLAY_DISTANCES_KM}
+
+
+def test_toggle_paces_for_zone_only_adds_does_not_remove_others():
+    state = AppState()
+    state.disable_all_paces()
+    state.set_pace_enabled("Easy", "Mile", True)
+
+    state.toggle_paces_for_zone("Threshold")
+
+    assert ("Easy", "Mile") in state.enabled_paces
+    assert {("Threshold", dist) for dist in DISPLAY_DISTANCES_KM} <= state.enabled_paces
+
+
+def test_toggle_paces_for_zone_clears_when_row_fully_selected():
+    state = AppState()
+    state.disable_all_paces()
+    state.set_pace_enabled("Easy", "Mile", True)  # unrelated selection, should survive
+    state.toggle_paces_for_zone("Threshold")  # fully selects the Threshold row
+
+    state.toggle_paces_for_zone("Threshold")  # click again -> should clear it
+
+    assert not any(zone == "Threshold" for zone, _ in state.enabled_paces)
+    assert ("Easy", "Mile") in state.enabled_paces
 
 
 def test_calculate_gives_none_for_athlete_with_no_selected_results():

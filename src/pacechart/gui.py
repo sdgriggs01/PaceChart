@@ -138,10 +138,14 @@ class App(ttk.Frame):
         ttk.Button(controls, text="Select None", command=self._on_select_none_paces).pack(side="left", padx=4)
 
         for col, dist in enumerate(distances, start=1):
-            ttk.Label(body, text=dist, font=_BOLD).grid(row=1, column=col, padx=4)
+            ttk.Button(body, text=dist, command=lambda d=dist: self._on_select_distance(d)).grid(
+                row=1, column=col, padx=4, sticky="ew"
+            )
 
         for row, zone in enumerate(TRAINING_ZONES, start=2):
-            ttk.Label(body, text=zone, font=_BOLD).grid(row=row, column=0, sticky="w")
+            ttk.Button(body, text=zone, command=lambda z=zone: self._on_select_zone(z)).grid(
+                row=row, column=0, sticky="ew"
+            )
             for col, dist in enumerate(distances, start=1):
                 var = tk.BooleanVar(value=(zone, dist) in self.state.enabled_paces)
                 self._pace_vars[(zone, dist)] = var
@@ -155,6 +159,22 @@ class App(ttk.Frame):
         self.state.enable_all_paces()
         for var in self._pace_vars.values():
             var.set(True)
+
+    def _on_select_distance(self, distance: str) -> None:
+        """Paces-tab column header click: select every zone at this distance,
+        or clear the column if it's already fully selected."""
+        self.state.toggle_paces_for_distance(distance)
+        for zone in TRAINING_ZONES:
+            key = (zone, distance)
+            self._pace_vars[key].set(key in self.state.enabled_paces)
+
+    def _on_select_zone(self, zone: str) -> None:
+        """Paces-tab row header click: select every distance at this zone,
+        or clear the row if it's already fully selected."""
+        self.state.toggle_paces_for_zone(zone)
+        for dist in DISPLAY_DISTANCES_KM:
+            key = (zone, dist)
+            self._pace_vars[key].set(key in self.state.enabled_paces)
 
     def _on_select_none_paces(self) -> None:
         self.state.disable_all_paces()

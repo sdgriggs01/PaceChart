@@ -63,6 +63,26 @@ class AppState:
     def disable_all_paces(self) -> None:
         self.enabled_paces = set()
 
+    def toggle_paces_for_distance(self, distance: str) -> None:
+        """Paces-tab column header click: if every zone at this distance is
+        already enabled, clear them all; otherwise enable every zone at
+        this distance."""
+        keys = {(zone, distance) for zone in TRAINING_ZONES}
+        if keys <= self.enabled_paces:
+            self.enabled_paces -= keys
+        else:
+            self.enabled_paces |= keys
+
+    def toggle_paces_for_zone(self, zone: str) -> None:
+        """Paces-tab row header click: if every distance at this zone is
+        already enabled, clear them all; otherwise enable every distance
+        at this zone."""
+        keys = {(zone, distance) for distance in DISPLAY_DISTANCES_KM}
+        if keys <= self.enabled_paces:
+            self.enabled_paces -= keys
+        else:
+            self.enabled_paces |= keys
+
     def set_pace_enabled(self, zone: str, distance: str, enabled: bool) -> None:
         key = (zone, distance)
         if enabled:

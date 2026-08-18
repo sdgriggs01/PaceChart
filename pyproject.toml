@@ -1,0 +1,29 @@
+[project]
+name = "pacechart"
+version = "0.1.0"
+description = "Scrapes Green Hope XC roster/results, converts marks to a 5k-equivalent, and generates a training-pace PDF."
+requires-python = ">=3.11"
+dependencies = [
+    "requests",
+    "beautifulsoup4",
+    "reportlab",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+pacechart = "pacechart.gui:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

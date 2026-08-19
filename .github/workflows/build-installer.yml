@@ -4,6 +4,9 @@ on:
   push:
     branches: [master]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -41,3 +44,13 @@ jobs:
           name: PaceChartSetup-${{ steps.version.outputs.version }}
           path: build/installer/PaceChartSetup.exe
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest build (v${{ steps.version.outputs.version }})"
+          body: |
+            Automatically built from [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) on master. This release is updated on every push to master.
+          make_latest: true
+          files: build/installer/PaceChartSetup.exe

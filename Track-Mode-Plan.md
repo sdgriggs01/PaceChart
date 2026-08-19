@@ -348,21 +348,31 @@ zone label to display*. Proposed integration into the existing tab flow:
   `athletes`/`scheduled_meets`/computed results (switching modes is
   effectively "start over" — consistent with decision 3, no cross-mode
   merging).
-- Results grid tab (step 1, "Athletes × Meets" grid): unchanged in
-  structure — same checkbox-per-result grid, same "select most recent"
-  button. Track mode's grid just has track meets as columns and 1600m/3200m
-  (or whatever else matched the distance filter) results as the only
-  populated cells, since sprints/field events were filtered out during
-  scraping — a track athlete who only ran sprints all season would show as
-  entirely blank in this table, same as an XC athlete with no result for a
-  given meet. Consider a column note or tooltip showing which event
-  (1600m vs 3200m) each checked cell represents, since — unlike XC where
-  every meet has one team race — a track athlete could have both a 1600m
-  and a 3200m result at the *same* meet, and the existing one-cell-per-
-  (athlete, meet) grid model assumes one result per meet. **This is a real
-  gap**: `models.py`'s `RaceResult`/grid design has no notion of "multiple
-  results at the same meet" being distinguishable in the UI beyond the
-  single checkbox — see Open Questions.
+- Results grid tab (step 1, "Athletes × Meets" grid): **rows are keyed by
+  (athlete, event distance), not just athlete, in track mode.** Meet columns
+  stay as-is (same "one checkbox per meet" shape), but an athlete with
+  results at more than one distance (e.g. both a 1600m and a 3200m across
+  the season) gets one display row per distinct distance, e.g. "A. Lee
+  (1600m)" and "A. Lee (3200m)" as separate rows, each with checkboxes only
+  in the meet columns where that athlete has a result at that specific
+  distance. This is a **display-only** grouping — `models.py`'s
+  `Athlete`/`RaceResult` are unchanged (still one flat `results: list[RaceResult]`
+  per athlete; `selected` still lives on the `RaceResult`); a new grouping
+  helper (e.g. `AppState.track_grid_rows(gender) -> list[tuple[Athlete, float, list[RaceResult]]]`,
+  grouping `athlete.results` by `distance_km`) produces the display rows for
+  `gui.py` to render. "Select most recent" and Calc are unaffected: Calc still
+  averages *all* of an athlete's selected results (across every display row)
+  into one 3000m-equivalent `Performance`, so a coach who checks both a 1600m
+  and a 3200m result for the same athlete gets both blended into that
+  athlete's single output row, same as selecting two different meets does
+  today. The distance used for a row's label comes from the same
+  `_TRACK_DISTANCE_RE`-derived `distance_km` already stored on each
+  `RaceResult` — no hardcoding to exactly "1600m or 3200m", so a rare third
+  distance (e.g. a future 3000m heat) would get its own row automatically.
+  A track athlete who only ran sprints/field events all season produces zero
+  rows (nothing in `results` survived the scraper's distance filter), same
+  effective outcome as an XC athlete with no results — no special-casing
+  needed for that case.
 - Paces tab (step 2) and template save/load: unchanged — the 11×9 zone/
   distance grid is identical for both modes (see Architecture rationale).
 - Calc button (step 3-4): unchanged UI, dispatches to
@@ -378,41 +388,58 @@ zone label to display*. Proposed integration into the existing tab flow:
   included in the average, once the multi-result-per-meet grid gap is
   resolved.
 
-## Open questions / risks
+## Open questions — resolved
 
-- **Same-meet multiple-events gap**: a track athlete can have both a 1600m
-  and a 3200m result at one meet (both are "Run" events, both ≥1600m, both
-  would be scraped). The current results-grid UI (Design.md step 1) is
-  built around one checkbox per (athlete, meet) cell; it needs to become
-  one checkbox per (athlete, meet, *result*) to handle this, or the
-  results grid needs a secondary dimension. Not resolved by this plan —
-  needs a UI decision before implementation.
-- **Distance regex generality**: only three 2026 meets (one dual, one
-  invitational, one conference championship) were fetched; the "K"-free,
-  `"NNNNm Run"`-labeled pattern was consistent across all three, but
-  regional/state-meet or early-season-invitational pages weren't checked
-  and could in principle use different labels (e.g. some invitational
-  platforms print "Mile Run" for 1600m). If that turns out to be true,
-  `_TRACK_DISTANCE_RE` will need a small set of alternate patterns rather
-  than the single one proposed here — worth spot-checking a state
-  championship page once one exists (2026 state meet is 05/16/26, in the
-  future relative to this research).
-- **3000m steeplechase / rare events**: the equivalent-performance table
-  has a `"3000m Steeplechase"` entry distinct from plain `"3000m"`; none of
-  the three fetched meets included a steeplechase heat (not a common
-  Green Hope conference event), so it's undetermined whether the site ever
-  labels one, and if so, whether it should be excluded (steeplechase times
-  aren't comparable to flat-race paces) — recommend explicitly excluding
-  any heading containing "steeplechase" alongside the "relay" exclusion,
-  as a precaution, even though it wasn't observed.
-- **User-Agent / access requirements**: not independently re-verified that
-  track.greenhopetrackxc.com specifically 406s on the default `requests`
-  UA (only confirmed it works *with* the existing browser UA, matching XC
-  site behavior) — reasonable to assume the same CMS enforces the same
-  check, but not proven bit-for-bit.
-- **Track roster IDs vs XC roster IDs**: confirmed these are different
-  numbering spaces (e.g. an athlete may have a different numeric ID on each
-  subdomain). Since decision 3 forbids merging anyway, this is only a risk
-  if a future implementer is tempted to key track data off XC athlete IDs
-  — they must not; track mode needs its own independent
-  `dict[int, Athlete]` keyed by track-site IDs.
+All items below were open in the first draft of this plan; each has now
+been either decided (with the repo owner) or independently re-verified
+against the live site. Nothing remains open.
+
+- **Same-meet multiple-events gap — resolved, decision: split grid rows by
+  (athlete, distance).** See "GUI/workflow changes" above: track mode's
+  results grid shows one row per (athlete, event distance) rather than one
+  row per athlete, so a 1600m result and a 3200m result at the same meet
+  get independent checkboxes. Purely a display/grouping change — no
+  `models.py` changes.
+- **Distance regex generality — resolved, confirmed across 5 meets, not
+  just the original 3.** Additionally fetched the 2026 NCHSAA 8A State
+  Championships (`meet/view/1322`, both `/M` and `/F`) and an early-season
+  non-conference meet, the "NC Runners Elite Tune Up" (`meet/view/1311/M`).
+  Event headings at both remain the plain `"{distance}m Run"` form — e.g.
+  `<h4>3200m Run</h4>` (state, boys), `<h4>1600m Run</h4>` (state, girls;
+  also present at the tune-up meet). No "Mile Run" or other alternate
+  label ever appeared. One incidental finding worth documenting: the state
+  meet's boys page has no `1600m Run` heading and the girls page has no
+  `3200m Run` heading — **meet results pages only include events where a
+  Green Hope athlete actually has a result**, not every event on the
+  meet's card (expected at a championship meet, where only qualifiers
+  race). This needs no special-case handling — it's the same "heading not
+  found → no result for that distance" behavior the parser already has for
+  every other meet.
+- **3000m steeplechase — resolved, decision: exclude by name, matching the
+  original recommendation.** Still never observed, even after checking the
+  state championship pages (the meet tier where it would most likely
+  appear if run at all). Formalizing the earlier recommendation as a fixed
+  rule: reject any `<h4>` heading containing "steeplechase"
+  (case-insensitive), alongside the "relay" exclusion, in
+  `_TRACK_DISTANCE_RE`'s pre-filter.
+- **User-Agent / access requirements — resolved, confirmed.** Re-tested
+  directly: `requests.get(...)` with `requests`' own default User-Agent
+  against `track.greenhopetrackxc.com/index.php/schedule/view` returns
+  **406**; the existing browser UA (`scraper.py`'s `DEFAULT_HEADERS`)
+  returns 200. Same requirement as the XC site — `track_scraper.py` should
+  reuse `_session_with_headers`/`DEFAULT_HEADERS` from `scraper.py` as-is
+  rather than redefining them.
+- **Track roster IDs vs XC roster IDs — not a question, just a documented
+  fact.** Confirmed different numbering spaces per subdomain. Since
+  decision 3 forbids merging anyway, this only matters as a reminder: track
+  mode must key its `dict[int, Athlete]` off track-site IDs, never XC ones.
+- **New, incidental finding (not previously flagged): decorative markup
+  inside result cells at championship meets.** The state-meet time cells
+  sometimes contain a season-best/qualifying icon ahead of the time, e.g.
+  `<td align="right"><small><i class="fa fa-star text-success"></i></small> 5:08.96</td>`.
+  This does not require any code change: `.get_text(strip=True)` (already
+  how both the existing `_parse_time_to_seconds` caller and the proposed
+  track parser read the cell) yields plain `"5:08.96"`, since the `<i>` tag
+  contributes no text content. Noted here only so a future implementer
+  isn't surprised by the raw HTML if they inspect a championship page
+  directly.

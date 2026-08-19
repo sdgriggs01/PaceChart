@@ -17,7 +17,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from pacechart import templates as pace_templates
-from pacechart.app_state import AppState, GroupBy, PaceKey
+from pacechart.app_state import AppState, GroupBy, PaceKey, SortBy
 from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES, format_minutes, output_decimals_for
 from pacechart.models import GENDER_LABELS, Gender, RaceResult
 from pacechart.pdf import fits_one_page, generate_pdf
@@ -208,6 +208,27 @@ class App(ttk.Frame):
                 command=self._on_group_by_changed,
             ).pack(side="left")
 
+        sort_by_frame = ttk.Frame(bar)
+        sort_by_frame.pack(side="left", padx=10)
+        ttk.Label(sort_by_frame, text="Sort by:").pack(side="left")
+        self.sort_by_var = tk.StringVar(value=self.state.sort_by.value)
+        for sort_by, label in ((SortBy.NAME, "Name"), (SortBy.AVERAGE_TIME, "Average Time")):
+            ttk.Radiobutton(
+                sort_by_frame,
+                text=label,
+                value=sort_by.value,
+                variable=self.sort_by_var,
+                command=self._on_sort_by_changed,
+            ).pack(side="left")
+
+        self.show_average_time_var = tk.BooleanVar(value=self.state.show_average_time_column)
+        ttk.Checkbutton(
+            bar,
+            text="Show 5k Mark",
+            variable=self.show_average_time_var,
+            command=self._on_show_average_time_changed,
+        ).pack(side="left", padx=10)
+
         self.generate_pdf_button = ttk.Button(bar, text="Generate PDF", command=self._on_generate_pdf)
         self.generate_pdf_button.pack(side="right", padx=4)
         Tooltip(self.generate_pdf_button, "Press Calc first.")
@@ -236,6 +257,16 @@ class App(ttk.Frame):
 
     def _on_group_by_changed(self) -> None:
         self.state.group_by = GroupBy(self.group_by_var.get())
+        if self.state.computed_paces:
+            self._rebuild_output_grid()
+
+    def _on_sort_by_changed(self) -> None:
+        self.state.sort_by = SortBy(self.sort_by_var.get())
+        if self.state.computed_paces:
+            self._rebuild_output_grid()
+
+    def _on_show_average_time_changed(self) -> None:
+        self.state.show_average_time_column = self.show_average_time_var.get()
         if self.state.computed_paces:
             self._rebuild_output_grid()
 
@@ -513,23 +544,31 @@ class App(ttk.Frame):
     def _build_output_table(self, section: ttk.Frame, gender: Gender, pace_keys: list[PaceKey]) -> None:
         ttk.Label(section, text="Athlete", style="Header.TLabel").grid(row=0, column=0, sticky="nsew")
         ttk.Label(section, text="Gender", style="Header.TLabel").grid(row=0, column=1, sticky="nsew")
-        for col, (zone, dist) in enumerate(pace_keys, start=2):
+        col = 2
+        if self.state.show_average_time_column:
+            ttk.Label(section, text="5k Mark", style="Header.TLabel").grid(row=0, column=col, sticky="nsew")
+            col += 1
+        pace_keys_start_col = col
+        for offset, (zone, dist) in enumerate(pace_keys):
             ttk.Label(section, text=f"{zone}\n{dist}", style="SmallHeader.TLabel", justify="center").grid(
-                row=0, column=col, padx=1, sticky="nsew"
+                row=0, column=pace_keys_start_col + offset, padx=1, sticky="nsew"
             )
 
-        entries = sorted(
-            (kv for kv in self.state.athletes.items() if kv[1].gender is gender),
-            key=lambda kv: kv[1].name,
-        )
+        entries = self.state.sorted_athletes_for_output(gender)
         for row, (athlete_id, athlete) in enumerate(entries, start=1):
             ttk.Label(section, text=athlete.name).grid(row=row, column=0, sticky="w")
             ttk.Label(section, text=GENDER_LABELS[athlete.gender]).grid(row=row, column=1, sticky="w")
+            col = 2
+            if self.state.show_average_time_column:
+                performance = self.state.computed_performance.get(athlete_id)
+                text = format_minutes(performance.time_min, decimals=1) if performance else ""
+                ttk.Label(section, text=text).grid(row=row, column=col, padx=4)
+                col += 1
             paces = self.state.computed_paces.get(athlete_id)
-            for col, key in enumerate(pace_keys, start=2):
+            for offset, key in enumerate(pace_keys):
                 zone, dist = key
                 text = format_minutes(paces[key], decimals=output_decimals_for(dist)) if paces else ""
-                ttk.Label(section, text=text).grid(row=row, column=col, padx=4)
+                ttk.Label(section, text=text).grid(row=row, column=col + offset, padx=4)
 
 
 def main() -> None:

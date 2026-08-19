@@ -15,6 +15,7 @@ from pacechart.app_state import AppState
 from pacechart.models import Athlete, Gender, Meet, RaceResult
 from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES
 from pacechart.pdf import (
+    _build_rows,
     estimated_table_width_pt,
     fits_one_page,
     fits_portrait,
@@ -73,6 +74,26 @@ def test_generate_pdf_works_with_no_athletes(tmp_path: Path):
 
     assert output_path.exists()
     assert output_path.read_bytes().startswith(b"%PDF-")
+
+
+def test_build_rows_omits_5k_mark_column_by_default():
+    state = build_state()
+
+    rows = _build_rows(state, Gender.BOYS, state.sorted_enabled_paces())
+
+    assert "5k Mark" not in rows[0]
+
+
+def test_build_rows_includes_5k_mark_column_when_enabled():
+    state = build_state()
+    state.show_average_time_column = True
+
+    rows = _build_rows(state, Gender.BOYS, state.sorted_enabled_paces())
+
+    assert rows[0][1] == "5k Mark"
+    by_name = {row[0]: row[1] for row in rows[1:]}
+    assert by_name["Bob Smith"] == "19:18.6"
+    assert by_name["Zed NoResult"] == ""
 
 
 def test_fits_one_page_true_with_no_enabled_paces():

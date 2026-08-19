@@ -61,16 +61,19 @@ def usable_page_width_pt(use_landscape: bool = False) -> float:
 
 
 def _build_rows(state: AppState, gender: Gender, pace_keys: list[PaceKey]) -> list[list[str]]:
-    header = ["Athlete"] + [f"{zone}\n{dist}" for zone, dist in pace_keys]
+    header = ["Athlete"]
+    if state.show_average_time_column:
+        header.append("5k Mark")
+    header += [f"{zone}\n{dist}" for zone, dist in pace_keys]
     rows = [header]
 
-    entries = sorted(
-        (kv for kv in state.athletes.items() if kv[1].gender is gender),
-        key=lambda kv: kv[1].name,
-    )
+    entries = state.sorted_athletes_for_output(gender)
     for athlete_id, athlete in entries:
-        paces = state.computed_paces.get(athlete_id)
         row = [athlete.name]
+        if state.show_average_time_column:
+            performance = state.computed_performance.get(athlete_id)
+            row.append(format_minutes(performance.time_min, decimals=1) if performance else "")
+        paces = state.computed_paces.get(athlete_id)
         for zone, dist in pace_keys:
             if paces is None:
                 row.append("")

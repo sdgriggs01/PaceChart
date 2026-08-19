@@ -163,8 +163,18 @@ class AppState:
         `calculate()` fed into `training_paces()`), fastest first; athletes
         with no computed time (calc not yet run, or nothing selected) sort
         after everyone with a time, alphabetically among themselves.
+
+        XC mode keeps every athlete of this gender, even with no computed
+        performance (Design.md: "an athlete with no selected results still
+        gets a row... blank cells rather than omitting the athlete"). Track
+        mode omits athletes with no computed performance entirely -- a
+        track roster includes sprinters/jumpers/throwers etc. who never run
+        a 1600m+ distance event, so keeping every athlete would mean the
+        output is mostly blank rows.
         """
         entries = [(aid, a) for aid, a in self.athletes.items() if a.gender is gender]
+        if self.mode is Mode.TRACK:
+            entries = [(aid, a) for aid, a in entries if self.computed_performance.get(aid) is not None]
         if self.sort_by is SortBy.AVERAGE_TIME:
             def key(entry: tuple[int, Athlete]) -> tuple[bool, float, str]:
                 athlete_id, athlete = entry

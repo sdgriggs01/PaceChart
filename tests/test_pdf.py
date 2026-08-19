@@ -202,6 +202,35 @@ def test_generate_pdf_footer_contains_the_export_timestamp(tmp_path: Path):
     assert "Exported 2026-08-18 14:30:05" in first_page_text
 
 
+def test_generate_pdf_keeps_blank_row_for_xc_athlete_with_no_results(tmp_path: Path):
+    state = build_state()
+    output_path = tmp_path / "xc_blank_row.pdf"
+
+    generate_pdf(state, str(output_path))
+
+    from pypdf import PdfReader
+
+    text = "".join(page.extract_text() for page in PdfReader(str(output_path)).pages)
+    assert "Zed NoResult" in text
+
+
+def test_generate_pdf_omits_track_athlete_with_no_results(tmp_path: Path):
+    from pypdf import PdfReader
+
+    result = RaceResult(meet=make_meet(), distance_km=1.6, time_seconds=300, selected=True)
+    ran = Athlete(name="Ran Miler", gender=Gender.BOYS, results=[result])
+    didnt_run = Athlete(name="Zed NoResult", gender=Gender.BOYS, results=[])
+    state = AppState(mode=Mode.TRACK, athletes={1: ran, 2: didnt_run})
+    state.calculate()
+    output_path = tmp_path / "track_no_blank_row.pdf"
+
+    generate_pdf(state, str(output_path))
+
+    text = "".join(page.extract_text() for page in PdfReader(str(output_path)).pages)
+    assert "Ran Miler" in text
+    assert "Zed NoResult" not in text
+
+
 def test_generate_pdf_footer_labels_the_mode(tmp_path: Path):
     from pypdf import PdfReader
 

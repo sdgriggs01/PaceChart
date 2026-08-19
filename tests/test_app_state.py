@@ -262,6 +262,42 @@ def test_sorted_enabled_paces_defaults_to_grouped_by_zone():
     assert ordered == [("Easy", "Mile"), ("Easy", "1000m"), ("Threshold", "Mile")]
 
 
+def test_sorted_athletes_for_output_xc_mode_keeps_athlete_with_no_computed_performance():
+    _, with_result = make_athlete(
+        1, "Amy", Gender.GIRLS,
+        results=[RaceResult(meet=make_meet(), distance_km=5.0, time_seconds=1200, selected=True)],
+    )
+    _, no_result = make_athlete(2, "Zed", Gender.GIRLS, results=[])
+    state = AppState(athletes={1: with_result, 2: no_result})
+
+    state.calculate()
+
+    assert [a.name for _, a in state.sorted_athletes_for_output(Gender.GIRLS)] == ["Amy", "Zed"]
+
+
+def test_sorted_athletes_for_output_track_mode_omits_athlete_with_no_computed_performance():
+    _, with_result = make_athlete(
+        1, "Amy", Gender.GIRLS,
+        results=[RaceResult(meet=make_meet(), distance_km=1.6, time_seconds=300, selected=True)],
+    )
+    _, no_result = make_athlete(2, "Zed", Gender.GIRLS, results=[])
+    state = AppState(mode=Mode.TRACK, athletes={1: with_result, 2: no_result})
+
+    state.calculate()
+
+    assert [a.name for _, a in state.sorted_athletes_for_output(Gender.GIRLS)] == ["Amy"]
+
+
+def test_sorted_athletes_for_output_track_mode_before_calculate_omits_everyone():
+    # computed_performance is empty until calculate() runs, so nobody has
+    # a computed performance yet -- track mode's filter should reflect
+    # that rather than crashing on a missing key.
+    _, athlete = make_athlete(1, "Amy", Gender.GIRLS, results=[])
+    state = AppState(mode=Mode.TRACK, athletes={1: athlete})
+
+    assert state.sorted_athletes_for_output(Gender.GIRLS) == []
+
+
 def test_mode_defaults_to_xc():
     assert AppState().mode is Mode.XC
 

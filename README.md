@@ -1,6 +1,11 @@
 # PaceChart
 
+[![Tests](https://github.com/sdgriggs01/PaceChart/actions/workflows/tests.yml/badge.svg)](https://github.com/sdgriggs01/PaceChart/actions/workflows/tests.yml)
+[![Build installer](https://github.com/sdgriggs01/PaceChart/actions/workflows/build-installer.yml/badge.svg)](https://github.com/sdgriggs01/PaceChart/actions/workflows/build-installer.yml)
+
 A desktop tool for Green Hope XC: scrapes the team's roster and meet results, lets a coach pick which results to use per athlete, converts everything to a 5k-equivalent time, and generates a training-pace PDF (one sheet per gender).
+
+**[⬇ Download the latest installer](https://github.com/sdgriggs01/PaceChart/releases/latest)** — no Python or admin rights required. See [Building the installer](#building-the-installer) below for how it's built.
 
 See [Design.md](Design.md) for the full design/workflow spec and [Calculator-Methodology.md](Calculator-Methodology.md) for the math behind the pace calculations.
 
@@ -44,11 +49,12 @@ Tests run in CI on every pull request and push to `master` (see `.github/workflo
 
 Coaches don't need Python installed — the app ships as a per-user Windows
 installer that requires no admin rights (installs to
-`%LocalAppData%\Programs\PaceChart`.
+`%LocalAppData%\Programs\PaceChart`).
 
 A fresh installer is built automatically on every push to `master` (see
-`.github/workflows/build-installer.yml`) and uploaded as a workflow artifact.
-To build one locally:
+`.github/workflows/build-installer.yml`), published to the
+[latest release](https://github.com/sdgriggs01/PaceChart/releases/latest),
+and also uploaded as a workflow artifact. To build one locally:
 
 ```powershell
 .venv\Scripts\python.exe -m pip install -e ".[build]"

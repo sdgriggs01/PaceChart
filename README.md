@@ -40,6 +40,26 @@ This opens the GUI, which follows the workflow in [Design.md](Design.md):
 
 Tests run in CI on every pull request and push to `master` (see `.github/workflows/tests.yml`).
 
+## Building the installer
+
+Coaches don't need Python installed — the app ships as a per-user Windows
+installer that requires no admin rights (installs to
+`%LocalAppData%\Programs\PaceChart`.
+
+A fresh installer is built automatically on every push to `master` (see
+`.github/workflows/build-installer.yml`) and uploaded as a workflow artifact.
+To build one locally:
+
+```powershell
+.venv\Scripts\python.exe -m pip install -e ".[build]"
+.venv\Scripts\python.exe -m PyInstaller packaging\pacechart.spec --distpath build\dist --workpath build\work --noconfirm
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=0.1.0" packaging\installer.iss
+```
+
+This needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) installed
+(`winget install JRSoftware.InnoSetup` or `choco install innosetup`). The
+resulting `PaceChartSetup.exe` is written to `build\installer\`.
+
 ## Project layout
 
 ```

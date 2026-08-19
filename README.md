@@ -3,9 +3,9 @@
 [![Tests](https://github.com/sdgriggs01/PaceChart/actions/workflows/tests.yml/badge.svg)](https://github.com/sdgriggs01/PaceChart/actions/workflows/tests.yml)
 [![Build installer](https://github.com/sdgriggs01/PaceChart/actions/workflows/build-installer.yml/badge.svg)](https://github.com/sdgriggs01/PaceChart/actions/workflows/build-installer.yml)
 
-A desktop tool for Green Hope XC: scrapes the team's roster and meet results, lets a coach pick which results to use per athlete, converts everything to a 5k-equivalent time, and generates a training-pace PDF (one sheet per gender).
+A desktop tool for Ggenerating pace charts driven by recent meet results.
 
-**[⬇ Download the latest installer](https://github.com/sdgriggs01/PaceChart/releases/latest)** — no Python or admin rights required. See [Building the installer](#building-the-installer) below for how it's built.
+**[⬇ Download the latest installer](https://github.com/sdgriggs01/PaceChart/releases/latest)**. See [Building the installer](#building-the-installer) below for how it's built.
 
 See [Design.md](Design.md) for the full design/workflow spec and [Calculator-Methodology.md](Calculator-Methodology.md) for the math behind the pace calculations.
 

@@ -15,6 +15,9 @@ dev = [
     "pytest",
     "pypdf",
 ]
+build = [
+    "pyinstaller",
+]
 
 [project.scripts]
 pacechart = "pacechart.gui:main"

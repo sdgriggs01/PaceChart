@@ -21,9 +21,11 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import PageBreak, SimpleDocTemplate, Table, TableStyle
 
-from pacechart.app_state import AppState, PaceKey
+from pacechart.app_state import AppState, Mode, PaceKey
 from pacechart.calculator import format_minutes, output_decimals_for
 from pacechart.models import Gender
+
+_MODE_LABELS = {Mode.XC: "XC", Mode.TRACK: "Track"}
 
 _HEADER_BACKGROUND = colors.HexColor("#333333")
 _ALT_ROW_BACKGROUND = colors.whitesmoke
@@ -178,8 +180,8 @@ def fits_one_page(state: AppState) -> bool:
     return fits_portrait(state) or fits_landscape(state) or fits_split_landscape(state)
 
 
-def _footer_drawer(generated_at: datetime, page_width_pt: float):
-    text = f"Exported {generated_at.strftime('%Y-%m-%d %H:%M:%S')}"
+def _footer_drawer(generated_at: datetime, page_width_pt: float, mode_label: str):
+    text = f"{mode_label} — Exported {generated_at.strftime('%Y-%m-%d %H:%M:%S')}"
 
     def draw_footer(canvas, doc) -> None:
         canvas.saveState()
@@ -230,5 +232,5 @@ def generate_pdf(state: AppState, output_path: str, generated_at: datetime | Non
         if index < len(genders) - 1:
             elements.append(PageBreak())
 
-    footer = _footer_drawer(generated_at, pagesize[0])
+    footer = _footer_drawer(generated_at, pagesize[0], _MODE_LABELS[state.mode])
     doc.build(elements, onFirstPage=footer, onLaterPages=footer)

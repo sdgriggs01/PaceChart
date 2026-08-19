@@ -22,7 +22,9 @@ from pacechart.models import (
     Gender,
     Meet,
     RaceResult,
+    average_3k_equivalent,
     average_5k_equivalent,
+    to_3k_equivalent_minutes,
     to_5k_equivalent_minutes,
 )
 
@@ -75,6 +77,43 @@ def test_average_5k_equivalent_averages_converted_times_of_mixed_distances():
 
     assert performance is not None
     assert performance.distance_km == pytest.approx(5.0)
+    assert performance.time_min == pytest.approx(expected_avg)
+
+
+def test_to_3k_equivalent_for_1600m_result_matches_calculator_directly():
+    result = RaceResult(meet=make_meet(), distance_km=1.6, time_seconds=303.79)
+    expected = equivalent_performances(result.to_performance())["3000m"]
+    assert to_3k_equivalent_minutes(result) == pytest.approx(expected)
+
+
+def test_to_3k_equivalent_for_3200m_result_matches_calculator_directly():
+    result = RaceResult(meet=make_meet(), distance_km=3.2, time_seconds=586.98)
+    expected = equivalent_performances(result.to_performance())["3000m"]
+    assert to_3k_equivalent_minutes(result) == pytest.approx(expected)
+
+
+def test_average_3k_equivalent_returns_none_with_no_selection():
+    r1 = RaceResult(meet=make_meet("A", 1), distance_km=1.6, time_seconds=300, selected=False)
+    athlete = Athlete(name="Jane Doe", gender=Gender.GIRLS, results=[r1])
+    assert average_3k_equivalent(athlete) is None
+
+
+def test_average_3k_equivalent_averages_converted_times_of_mixed_track_distances():
+    # An athlete who ran both a 1600m and a 3200m over the season -- both
+    # selected results should be blended into one 3000m-equivalent, same
+    # as average_5k_equivalent does across mixed XC distances.
+    r_1600 = RaceResult(meet=make_meet("1600m race", 1), distance_km=1.6, time_seconds=300, selected=True)
+    r_3200 = RaceResult(meet=make_meet("3200m race", 2), distance_km=3.2, time_seconds=620, selected=True)
+    athlete = Athlete(name="Jane Doe", gender=Gender.GIRLS, results=[r_1600, r_3200])
+
+    performance = average_3k_equivalent(athlete)
+
+    expected_1600 = equivalent_performances(r_1600.to_performance())["3000m"]
+    expected_3200 = equivalent_performances(r_3200.to_performance())["3000m"]
+    expected_avg = (expected_1600 + expected_3200) / 2
+
+    assert performance is not None
+    assert performance.distance_km == pytest.approx(3.0)
     assert performance.time_min == pytest.approx(expected_avg)
 
 

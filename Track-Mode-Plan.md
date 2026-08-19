@@ -36,10 +36,10 @@ site — same Bootstrap classes, same footer copyright — but the meet-results
 page template differs meaningfully from the XC one (details below), so it is
 not a drop-in reparameterization of `scraper.py`'s results parsing.
 
-### Roster page — identical structure to XC
+### Roster page — same shape, one markup difference found during implementation
 
 `https://track.greenhopetrackxc.com/index.php/athletes/roster` — fetched, 200.
-Same shape as `xc.greenhopetrackxc.com`'s roster: `<div class="tab-pane" id="boys">`
+Same overall shape as `xc.greenhopetrackxc.com`'s roster: `<div class="tab-pane" id="boys">`
 / `id="girls"`, each containing `<h4 class="title-divider">` headings per
 class year followed by a `<table class="table table-condensed">` of
 `<a href=".../athletes/view/ID">Last, First</a>` rows. Example observed:
@@ -52,11 +52,22 @@ class year followed by a `<table class="table table-condensed">` of
     <td><a href="https://track.greenhopetrackxc.com/index.php/athletes/view/12514">Gabriel Cardenas</a></td>
 ```
 
-`scraper.py`'s `parse_roster` logic (find `#boys`/`#girls`, then
-`h4.title-divider` → next `table` → rows with an `athletes/view/(\d+)` link)
-applies **unchanged**, just against a different base URL and a disjoint set
-of athlete IDs (track roster IDs are the site's own numbering, not
-guaranteed to line up with XC roster IDs for the same person).
+**Correction, found while implementing and confirmed against a live end-to-end
+fetch (returned 0 athletes before the fix, 118 after):** the track roster's
+tables have **no `<tbody>` tag at all** (checked: 0 occurrences across all 8
+roster tables on the live page), unlike the XC roster's, which wraps every
+table body in an explicit `<tbody>`. `scraper.py`'s original `parse_roster`
+selected rows via `table.select("tbody tr")`, which — because BeautifulSoup's
+`html.parser` backend doesn't imply a `<tbody>` the way a browser does —
+silently matched zero rows on the track page. Fixed by switching to
+`table.find_all("tr")`, which is safe for the XC case too (its header `<tr>`
+inside `<thead>` has no athlete link, so it's already skipped by the
+existing `if link is None: continue` guard). Everything else about
+`parse_roster` (find `#boys`/`#girls`, then `h4.title-divider` → next
+`table` → rows with an `athletes/view/(\d+)` link) is unchanged, just
+against a different base URL and a disjoint set of athlete IDs (track
+roster IDs are the site's own numbering, not guaranteed to line up with
+XC roster IDs for the same person).
 
 ### Schedule page — identical structure to XC
 

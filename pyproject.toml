@@ -3,6 +3,7 @@ name = "pacechart"
 version = "0.1.0"
 description = "Scrapes Green Hope XC roster/results, converts marks to a 5k-equivalent, and generates a training-pace PDF."
 requires-python = ">=3.11"
+license = "MIT"
 dependencies = [
     "requests",
     "beautifulsoup4",

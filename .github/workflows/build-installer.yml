@@ -45,6 +45,11 @@ jobs:
           path: build/installer/PaceChartSetup.exe
           if-no-files-found: error
 
+      - name: Move 'latest' tag to this commit
+        run: |
+          git tag -f latest
+          git push origin latest --force
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:

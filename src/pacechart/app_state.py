@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from pacechart.calculator import DISPLAY_DISTANCES_KM, Performance, TRAINING_ZONES, training_paces
-from pacechart.models import Athlete, Gender, average_5k_equivalent
+from pacechart.models import Athlete, Gender, RaceResult, average_3k_equivalent, average_5k_equivalent
 from pacechart.scraper import ScheduledMeet
 
 PaceKey = tuple[str, str]  # (zone label, display distance label)
@@ -33,8 +33,30 @@ class SortBy(Enum):
     AVERAGE_TIME = "average_time"
 
 
+class Mode(Enum):
+    """Which season's data is loaded: cross-country (5000m-equivalent,
+    scraped from xc.greenhopetrackxc.com) or track (3000m-equivalent,
+    scraped from track.greenhopetrackxc.com). See Track-Mode-Plan.md.
+    Fully separate data sets -- switching modes replaces whatever was
+    loaded, never merges the two."""
+
+    XC = "xc"
+    TRACK = "track"
+
+
+_AVERAGER_BY_MODE = {
+    Mode.XC: average_5k_equivalent,
+    Mode.TRACK: average_3k_equivalent,
+}
+
+
 @dataclass
 class AppState:
+    # Which season's data this state holds -- determines which scraper
+    # module `athletes`/`scheduled_meets` were loaded from and which
+    # reference distance calculate() averages to (see Mode).
+    mode: Mode = Mode.XC
+
     athletes: dict[int, Athlete] = field(default_factory=dict)
     scheduled_meets: list[ScheduledMeet] = field(default_factory=list)
 
@@ -141,8 +163,18 @@ class AppState:
         `calculate()` fed into `training_paces()`), fastest first; athletes
         with no computed time (calc not yet run, or nothing selected) sort
         after everyone with a time, alphabetically among themselves.
+
+        XC mode keeps every athlete of this gender, even with no computed
+        performance (Design.md: "an athlete with no selected results still
+        gets a row... blank cells rather than omitting the athlete"). Track
+        mode omits athletes with no computed performance entirely -- a
+        track roster includes sprinters/jumpers/throwers etc. who never run
+        a 1600m+ distance event, so keeping every athlete would mean the
+        output is mostly blank rows.
         """
         entries = [(aid, a) for aid, a in self.athletes.items() if a.gender is gender]
+        if self.mode is Mode.TRACK:
+            entries = [(aid, a) for aid, a in entries if self.computed_performance.get(aid) is not None]
         if self.sort_by is SortBy.AVERAGE_TIME:
             def key(entry: tuple[int, Athlete]) -> tuple[bool, float, str]:
                 athlete_id, athlete = entry
@@ -154,15 +186,17 @@ class AppState:
 
     def calculate(self) -> None:
         """Design.md workflow steps 3-4: average each athlete's selected
-        results into a 5k-equivalent performance, then generate every
-        enabled training pace from it. Athletes with no selected results
-        get None in both dicts (workflow: "no results generate a row with
-        no results, but not omit the athlete")."""
+        results into a 5k-equivalent (XC mode) or 3k-equivalent (Track
+        mode) performance, then generate every enabled training pace from
+        it. Athletes with no selected results get None in both dicts
+        (workflow: "no results generate a row with no results, but not
+        omit the athlete")."""
         self.computed_performance.clear()
         self.computed_paces.clear()
+        averager = _AVERAGER_BY_MODE[self.mode]
 
         for athlete_id, athlete in self.athletes.items():
-            performance = average_5k_equivalent(athlete)
+            performance = averager(athlete)
             self.computed_performance[athlete_id] = performance
 
             if performance is None:
@@ -174,3 +208,31 @@ class AppState:
                 (zone, dist): full_paces[zone][dist]
                 for zone, dist in self.enabled_paces
             }
+
+    def track_grid_rows(self, gender: Gender) -> list[tuple[Athlete, float, list[RaceResult]]]:
+        """Track-Mode-Plan.md's results-grid decision: one display row per
+        (athlete, event distance) rather than one row per athlete, since a
+        track athlete can have both a 1600m and a 3200m result in the same
+        season (even at the same meet) and each needs its own checkboxes.
+        Purely a display grouping over `athlete.results` -- `Athlete`/
+        `RaceResult` themselves are unchanged, and `calculate()` still
+        averages every selected result together regardless of which row it
+        was checked from.
+
+        Returns one `(athlete, distance_km, results)` tuple per athlete per
+        distinct distance among their results, athletes sorted by name then
+        distance ascending. An athlete with no track results (e.g. ran only
+        sprints/field events, all filtered out by the scraper) contributes
+        no rows."""
+        rows: list[tuple[Athlete, float, list[RaceResult]]] = []
+        for athlete in self.athletes_by_gender(gender):
+            distances = sorted({result.distance_km for result in athlete.results})
+            for distance_km in distances:
+                results = [r for r in athlete.results if r.distance_km == distance_km]
+                rows.append((athlete, distance_km, results))
+        return rows
+
+
+def track_distance_label(distance_km: float) -> str:
+    """Display label for a track_grid_rows() row, e.g. 1.6 -> "1600m"."""
+    return f"{round(distance_km * 1000)}m"

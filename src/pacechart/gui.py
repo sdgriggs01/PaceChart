@@ -17,11 +17,14 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from pacechart import templates as pace_templates
-from pacechart.app_state import AppState, GroupBy, PaceKey, SortBy
+from pacechart.app_state import AppState, GroupBy, Mode, PaceKey, SortBy, track_distance_label
 from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES, format_minutes, output_decimals_for
 from pacechart.models import GENDER_LABELS, Gender, RaceResult
 from pacechart.pdf import fits_one_page, generate_pdf
 from pacechart.scraper import attach_results, fetch_meet_results, fetch_roster, fetch_schedule
+from pacechart.track_scraper import fetch_track_meet_results, fetch_track_roster, fetch_track_schedule
+
+MODE_LABELS = {Mode.XC: "XC", Mode.TRACK: "Track"}
 
 ASSETS_DIR = Path(__file__).parent / "assets"
 ICON_PATH = ASSETS_DIR / "logo.png"
@@ -168,6 +171,7 @@ class App(ttk.Frame):
         self._task_queue: queue.Queue = queue.Queue()
         self._pace_vars: dict[PaceKey, tk.BooleanVar] = {}
         self._result_vars: list[tk.BooleanVar] = []
+        self._mode_radios: list[ttk.Radiobutton] = []
 
         self.pack(fill="both", expand=True)
         self._build_controls()
@@ -187,6 +191,21 @@ class App(ttk.Frame):
     def _build_controls(self) -> None:
         bar = ttk.Frame(self)
         bar.pack(fill="x", padx=8, pady=6)
+
+        mode_frame = ttk.Frame(bar)
+        mode_frame.pack(side="left", padx=(0, 10))
+        ttk.Label(mode_frame, text="Mode:").pack(side="left")
+        self.mode_var = tk.StringVar(value=self.state.mode.value)
+        for mode in Mode:
+            radio = ttk.Radiobutton(
+                mode_frame,
+                text=MODE_LABELS[mode],
+                value=mode.value,
+                variable=self.mode_var,
+                command=self._on_mode_changed,
+            )
+            radio.pack(side="left")
+            self._mode_radios.append(radio)
 
         self.load_button = ttk.Button(bar, text="Load Data", command=self._on_load_clicked)
         self.load_button.pack(side="left")
@@ -269,6 +288,23 @@ class App(ttk.Frame):
         self.state.show_average_time_column = self.show_average_time_var.get()
         if self.state.computed_paces:
             self._rebuild_output_grid()
+
+    def _on_mode_changed(self) -> None:
+        """Switching modes is "start over" (Track-Mode-Plan.md: XC and
+        track data are never merged) -- clears whatever was loaded/computed
+        for the previous mode."""
+        new_mode = Mode(self.mode_var.get())
+        if new_mode is self.state.mode:
+            return
+        self.state.mode = new_mode
+        self.state.athletes = {}
+        self.state.scheduled_meets = []
+        self.state.computed_performance.clear()
+        self.state.computed_paces.clear()
+        self.status_var.set("Not loaded")
+        self._rebuild_results_grids()
+        self._rebuild_output_grid()
+        self._update_button_states()
 
     # --- notebook / tabs -----------------------------------------------------
 
@@ -408,22 +444,29 @@ class App(ttk.Frame):
 
     def _on_load_clicked(self) -> None:
         self.load_button.state(["disabled"])
+        for radio in self._mode_radios:
+            radio.state(["disabled"])
         self.status_var.set("Loading roster...")
-        threading.Thread(target=self._load_data_worker, daemon=True).start()
+        threading.Thread(target=self._load_data_worker, args=(self.state.mode,), daemon=True).start()
 
-    def _load_data_worker(self) -> None:
+    def _load_data_worker(self, mode: Mode) -> None:
+        # `mode` is captured at load-start (radio buttons are disabled for
+        # the duration) so this thread can't race a mid-load mode switch.
+        fetch_roster_fn = fetch_track_roster if mode is Mode.TRACK else fetch_roster
+        fetch_schedule_fn = fetch_track_schedule if mode is Mode.TRACK else fetch_schedule
+        fetch_meet_results_fn = fetch_track_meet_results if mode is Mode.TRACK else fetch_meet_results
         try:
-            athletes = fetch_roster()
+            athletes = fetch_roster_fn()
             self._task_queue.put(("status", f"Loaded {len(athletes)} athletes. Loading schedule..."))
 
-            scheduled_meets = fetch_schedule()
+            scheduled_meets = fetch_schedule_fn()
             self._task_queue.put(("status", f"Loaded {len(scheduled_meets)} meets. Loading results..."))
 
             for index, scheduled in enumerate(scheduled_meets, start=1):
                 for gender in (Gender.BOYS, Gender.GIRLS):
                     if scheduled.results_url(gender) is None:
                         continue
-                    results = fetch_meet_results(scheduled, gender)
+                    results = fetch_meet_results_fn(scheduled, gender)
                     attach_results(athletes, results)
                 self._task_queue.put(("status", f"Loaded results: meet {index}/{len(scheduled_meets)}..."))
 
@@ -443,11 +486,15 @@ class App(ttk.Frame):
                     self.state.scheduled_meets = scheduled_meets
                     self.status_var.set(f"Loaded {len(athletes)} athletes, {len(scheduled_meets)} meets.")
                     self.load_button.state(["!disabled"])
+                    for radio in self._mode_radios:
+                        radio.state(["!disabled"])
                     self._rebuild_results_grids()
                     self._update_button_states()
                 elif kind == "error":
                     self.status_var.set("Load failed.")
                     self.load_button.state(["!disabled"])
+                    for radio in self._mode_radios:
+                        radio.state(["!disabled"])
                     messagebox.showerror("Load failed", payload)
         except queue.Empty:
             pass
@@ -464,7 +511,6 @@ class App(ttk.Frame):
 
     def _build_results_grid(self, body: ttk.Frame, gender: Gender) -> None:
         meets = self.state.meets_with_results_for(gender)
-        athletes = self.state.athletes_by_gender(gender)
 
         ttk.Label(body, text="Athlete", style="Header.TLabel").grid(row=0, column=0, sticky="nsew")
         for col, scheduled in enumerate(meets, start=1):
@@ -472,9 +518,18 @@ class App(ttk.Frame):
                 row=0, column=col, padx=1, sticky="nsew"
             )
 
-        for row, athlete in enumerate(athletes, start=1):
-            ttk.Label(body, text=athlete.name).grid(row=row, column=0, sticky="w")
-            results_by_meet = {result.meet: result for result in athlete.results}
+        if self.state.mode is Mode.TRACK:
+            # One row per (athlete, event distance) -- see track_grid_rows.
+            grid_rows = [
+                (f"{athlete.name} ({track_distance_label(distance_km)})", row_results)
+                for athlete, distance_km, row_results in self.state.track_grid_rows(gender)
+            ]
+        else:
+            grid_rows = [(athlete.name, athlete.results) for athlete in self.state.athletes_by_gender(gender)]
+
+        for row, (label, row_results) in enumerate(grid_rows, start=1):
+            ttk.Label(body, text=label).grid(row=row, column=0, sticky="w")
+            results_by_meet = {result.meet: result for result in row_results}
             for col, scheduled in enumerate(meets, start=1):
                 result = results_by_meet.get(scheduled.meet)
                 if result is None:

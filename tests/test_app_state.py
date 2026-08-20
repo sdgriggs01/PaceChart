@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from pacechart.app_state import AppState, GroupBy, SortBy, all_pace_keys
+from pacechart.app_state import AppState, GroupBy, Mode, SortBy, all_pace_keys, track_distance_label
 from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES
 from pacechart.models import Athlete, Gender, Meet, RaceResult
 from pacechart.scraper import ScheduledMeet
@@ -260,6 +260,110 @@ def test_sorted_enabled_paces_defaults_to_grouped_by_zone():
     # Easy (lower intensity) sorts before Threshold; within a zone, Mile
     # (first in DISPLAY_DISTANCES_KM) sorts before 1000m.
     assert ordered == [("Easy", "Mile"), ("Easy", "1000m"), ("Threshold", "Mile")]
+
+
+def test_sorted_athletes_for_output_xc_mode_keeps_athlete_with_no_computed_performance():
+    _, with_result = make_athlete(
+        1, "Amy", Gender.GIRLS,
+        results=[RaceResult(meet=make_meet(), distance_km=5.0, time_seconds=1200, selected=True)],
+    )
+    _, no_result = make_athlete(2, "Zed", Gender.GIRLS, results=[])
+    state = AppState(athletes={1: with_result, 2: no_result})
+
+    state.calculate()
+
+    assert [a.name for _, a in state.sorted_athletes_for_output(Gender.GIRLS)] == ["Amy", "Zed"]
+
+
+def test_sorted_athletes_for_output_track_mode_omits_athlete_with_no_computed_performance():
+    _, with_result = make_athlete(
+        1, "Amy", Gender.GIRLS,
+        results=[RaceResult(meet=make_meet(), distance_km=1.6, time_seconds=300, selected=True)],
+    )
+    _, no_result = make_athlete(2, "Zed", Gender.GIRLS, results=[])
+    state = AppState(mode=Mode.TRACK, athletes={1: with_result, 2: no_result})
+
+    state.calculate()
+
+    assert [a.name for _, a in state.sorted_athletes_for_output(Gender.GIRLS)] == ["Amy"]
+
+
+def test_sorted_athletes_for_output_track_mode_before_calculate_omits_everyone():
+    # computed_performance is empty until calculate() runs, so nobody has
+    # a computed performance yet -- track mode's filter should reflect
+    # that rather than crashing on a missing key.
+    _, athlete = make_athlete(1, "Amy", Gender.GIRLS, results=[])
+    state = AppState(mode=Mode.TRACK, athletes={1: athlete})
+
+    assert state.sorted_athletes_for_output(Gender.GIRLS) == []
+
+
+def test_mode_defaults_to_xc():
+    assert AppState().mode is Mode.XC
+
+
+def test_calculate_uses_3k_equivalent_in_track_mode():
+    from pacechart.models import average_3k_equivalent
+
+    result = RaceResult(meet=make_meet(), distance_km=1.6, time_seconds=300, selected=True)
+    _, athlete = make_athlete(1, "Jane", Gender.GIRLS, results=[result])
+    state = AppState(mode=Mode.TRACK, athletes={1: athlete})
+
+    state.calculate()
+
+    expected = average_3k_equivalent(athlete)
+    performance = state.computed_performance[1]
+    assert performance is not None
+    assert performance.distance_km == pytest.approx(3.0)
+    assert performance.time_min == pytest.approx(expected.time_min)
+
+
+def test_calculate_still_uses_5k_equivalent_in_xc_mode():
+    result = RaceResult(meet=make_meet(), distance_km=5.0, time_seconds=1200, selected=True)
+    _, athlete = make_athlete(1, "Jane", Gender.GIRLS, results=[result])
+    state = AppState(athletes={1: athlete})
+
+    state.calculate()
+
+    assert state.computed_performance[1].distance_km == pytest.approx(5.0)
+
+
+def test_track_distance_label_formats_meters():
+    assert track_distance_label(1.6) == "1600m"
+    assert track_distance_label(3.2) == "3200m"
+
+
+def test_track_grid_rows_splits_an_athlete_with_two_distances_into_two_rows():
+    meet_a = make_meet("Dual", 1)
+    meet_b = make_meet("Invitational", 2)
+    r_1600 = RaceResult(meet=meet_a, distance_km=1.6, time_seconds=300)
+    r_3200 = RaceResult(meet=meet_b, distance_km=3.2, time_seconds=620)
+    _, athlete = make_athlete(1, "Jane", Gender.GIRLS, results=[r_1600, r_3200])
+    state = AppState(mode=Mode.TRACK, athletes={1: athlete})
+
+    rows = state.track_grid_rows(Gender.GIRLS)
+
+    assert rows == [(athlete, 1.6, [r_1600]), (athlete, 3.2, [r_3200])]
+
+
+def test_track_grid_rows_groups_same_distance_results_from_different_meets_into_one_row():
+    meet_a = make_meet("Dual", 1)
+    meet_b = make_meet("Invitational", 2)
+    r1 = RaceResult(meet=meet_a, distance_km=1.6, time_seconds=305)
+    r2 = RaceResult(meet=meet_b, distance_km=1.6, time_seconds=300)
+    _, athlete = make_athlete(1, "Jane", Gender.GIRLS, results=[r1, r2])
+    state = AppState(mode=Mode.TRACK, athletes={1: athlete})
+
+    rows = state.track_grid_rows(Gender.GIRLS)
+
+    assert rows == [(athlete, 1.6, [r1, r2])]
+
+
+def test_track_grid_rows_skips_athletes_with_no_results():
+    _, athlete = make_athlete(1, "Jane", Gender.GIRLS, results=[])
+    state = AppState(mode=Mode.TRACK, athletes={1: athlete})
+
+    assert state.track_grid_rows(Gender.GIRLS) == []
 
 
 def test_sorted_enabled_paces_grouped_by_distance():

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<body>
+<!-- Structure verified against the live 2026 track.greenhopetrackxc.com
+     site (see Track-Mode-Plan.md): plain <h4> per event, no <thead>,
+     each heat's results table is the next <table> after its heading,
+     3 columns (Place, Time, Runner). Athlete names/ids for the 1600m,
+     3200m, and 4x200m-relay heats are taken verbatim from real fetched
+     pages (2026 season); the 800m/Long Jump/steeplechase/4x1600m-relay
+     heats below are added or adapted only to exercise filtering edge
+     cases this test suite needs to cover. -->
+<div id="content">
+  <div class="container">
+    <h3 class="title-divider">
+      <span>2026 Battle for 55 Dual <span class="de-em">Boys</span></span>
+      <small>Panther Creek HS. Cary NC - 03/05/26</small>
+    </h3>
+    <div class="block">
+      <div class="col-md-12">
+
+        <div class="col-md-4">
+          <h4>Long Jump</h4>
+          <table class="table table-striped table-condensed table-bordered">
+            <tbody>
+              <tr>
+                <td align="right">1</td>
+                <td align="right">20-06.00</td>
+                <td><a href="https://track.greenhopetrackxc.com/index.php/athletes/view/12500">Some Jumper</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="col-md-4">
+          <h4>800m Run</h4>
+          <table class="table table-striped table-condensed table-bordered">
+            <tbody>
+              <tr>
+                <td align="right">3</td>
+                <td align="right">2:05.30</td>
+                <td><a href="https://track.greenhopetrackxc.com/index.php/athletes/view/12600">Eight Hundred Runner</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="col-md-4">
+          <h4>1600m Run</h4>
+          <table class="table table-striped table-condensed table-bordered">
+            <tbody>
+              <tr>
+                <td align="right">1</td>
+                <td align="right">5:03.79</td>
+                <td><a href="https://track.greenhopetrackxc.com/index.php/athletes/view/12655">
+                    Graham Severson</a>
+                    <small>(Green Hope)</small>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="col-md-4">
+          <h4>3200m Run</h4>
+          <table class="table table-striped table-condensed table-bordered">
+            <tbody>
+              <tr>
+                <td align="right">12</td>
+                <td align="right"><small><i class="fa fa-star text-success"></i></small> 9:46.98</td>
+                <td><a href="https://track.greenhopetrackxc.com/index.php/athletes/view/12774">
+                    Nathan Vo</a>
+                    <small>(Green Hope)</small>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="col-md-4">
+          <h4>4x200m Relay</h4>
+          <table class="table table-striped table-condensed table-bordered">
+            <tbody>
+              <tr>
+                <td align="right">1</td>
+                <td align="right">1:32.10</td>
+                <td><a href="https://track.greenhopetrackxc.com/index.php/athletes/view/12970">
+                    Green Hope 'A'</a>
+                    <br/><small><small>1</small>&nbsp;<a href="https://track.greenhopetrackxc.com/index.php/athletes/view/12819">Everett&nbsp;Bruce</a></small>
+                    <br/><small><small>2</small>&nbsp;<a href="https://track.greenhopetrackxc.com/index.php/athletes/view/12703">Rohan&nbsp;Bhavsar</a></small>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Hypothetical heat, not observed on the live site as of this
+             research -- included only to exercise the relay-misdetection
+             guard Track-Mode-Plan.md flags: a "4x1600m Relay" heading
+             would otherwise pass a naive 1600m+ distance filter. -->
+        <div class="col-md-4">
+          <h4>4x1600m Relay</h4>
+          <table class="table table-striped table-condensed table-bordered">
+            <tbody>
+              <tr>
+                <td align="right">1</td>
+                <td align="right">18:30.00</td>
+                <td><a href="https://track.greenhopetrackxc.com/index.php/athletes/view/12980">Green Hope 'A'</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Hypothetical heat, never observed live even at the state
+             championship level -- included only to exercise the
+             defensive steeplechase exclusion Track-Mode-Plan.md
+             recommends. -->
+        <div class="col-md-4">
+          <h4>3000m Steeplechase</h4>
+          <table class="table table-striped table-condensed table-bordered">
+            <tbody>
+              <tr>
+                <td align="right">1</td>
+                <td align="right">10:15.00</td>
+                <td><a href="https://track.greenhopetrackxc.com/index.php/athletes/view/12999">Steeple Chaser</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -102,3 +102,28 @@ def average_5k_equivalent(athlete: Athlete) -> Performance | None:
     converted_times = [to_5k_equivalent_minutes(r) for r in selected]
     avg_time_min = sum(converted_times) / len(converted_times)
     return Performance(distance_km=5.0, time_min=avg_time_min)
+
+
+def to_3k_equivalent_minutes(result: RaceResult) -> float:
+    """Track mode's analogue of `to_5k_equivalent_minutes`: converts one
+    race result to a 3000m-equivalent time, in minutes (Track-Mode-Plan.md's
+    "Calculator reuse" -- 3000m is already the model's internal reference
+    distance, so this is just a different key off the same table)."""
+    predicted = equivalent_performances(result.to_performance())
+    return predicted["3000m"]
+
+
+def average_3k_equivalent(athlete: Athlete) -> Performance | None:
+    """Track mode's analogue of `average_5k_equivalent`: average an
+    athlete's selected results (each a 1600m+ track distance event, per
+    Track-Mode-Plan.md decision 1), each converted to a 3000m-equivalent
+    time first.
+
+    Returns None if the athlete has no selected results.
+    """
+    selected = athlete.selected_results()
+    if not selected:
+        return None
+    converted_times = [to_3k_equivalent_minutes(r) for r in selected]
+    avg_time_min = sum(converted_times) / len(converted_times)
+    return Performance(distance_km=3.0, time_min=avg_time_min)

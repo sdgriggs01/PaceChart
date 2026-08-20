@@ -71,9 +71,10 @@ resulting `PaceChartSetup.exe` is written to `build\installer\`.
 ```
 src/pacechart/
   calculator.py   # the pace/equivalent-performance model (see Calculator-Methodology.md)
-  models.py       # Athlete, RaceResult, Meet, and the 5k-equivalent averaging logic
-  scraper.py      # roster/schedule/results page parsing + fetching
-  app_state.py    # GUI-independent application state (selections, calculation, templates)
+  models.py       # Athlete, RaceResult, Meet, and the 5k/3k-equivalent averaging logic
+  scraper.py      # XC roster/schedule/results page parsing + fetching
+  track_scraper.py # track roster/schedule/results parsing + fetching (see Track-Mode-Plan.md)
+  app_state.py    # GUI-independent application state (selections, calculation, templates, XC/Track mode)
   templates.py    # persisted pace-selection templates (%APPDATA%\PaceChart\templates.json)
   pdf.py          # PDF report generation
   gui.py          # the Tkinter application

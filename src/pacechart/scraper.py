@@ -112,7 +112,14 @@ def parse_roster(html: str) -> dict[int, Athlete]:
             if table is None:
                 continue
 
-            for row in table.select("tbody tr"):
+            # `find_all("tr")`, not `select("tbody tr")`: the XC roster's
+            # tables wrap rows in an explicit <tbody>, but the track
+            # roster's don't -- Python's `html.parser` backend doesn't
+            # imply one the way a browser or an html5-tree-construction
+            # parser would, so `tbody tr` silently matches nothing there.
+            # Any header row lacking an athlete link is already skipped by
+            # the `link is None` check below, so this is safe either way.
+            for row in table.find_all("tr"):
                 link = row.find("a", href=_ATHLETE_HREF_RE)
                 if link is None:
                     continue
@@ -123,9 +130,9 @@ def parse_roster(html: str) -> dict[int, Athlete]:
     return athletes
 
 
-def fetch_roster(session: requests.Session | None = None) -> dict[int, Athlete]:
+def fetch_roster(session: requests.Session | None = None, url: str = ROSTER_URL) -> dict[int, Athlete]:
     session = _session_with_headers(session)
-    response = session.get(ROSTER_URL, timeout=REQUEST_TIMEOUT_SECONDS)
+    response = session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
     response.raise_for_status()
     return parse_roster(response.text)
 
@@ -168,9 +175,9 @@ def parse_schedule(html: str) -> list[ScheduledMeet]:
     return scheduled_meets
 
 
-def fetch_schedule(session: requests.Session | None = None) -> list[ScheduledMeet]:
+def fetch_schedule(session: requests.Session | None = None, url: str = SCHEDULE_URL) -> list[ScheduledMeet]:
     session = _session_with_headers(session)
-    response = session.get(SCHEDULE_URL, timeout=REQUEST_TIMEOUT_SECONDS)
+    response = session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
     response.raise_for_status()
     return parse_schedule(response.text)
 

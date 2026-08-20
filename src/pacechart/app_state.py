@@ -26,6 +26,13 @@ class GroupBy(Enum):
     DISTANCE = "distance"
 
 
+class SortBy(Enum):
+    """How the Output tab and PDF order their athlete rows."""
+
+    NAME = "name"
+    AVERAGE_TIME = "average_time"
+
+
 @dataclass
 class AppState:
     athletes: dict[int, Athlete] = field(default_factory=dict)
@@ -40,6 +47,16 @@ class AppState:
     # (all distances for "Easy" together, etc.) or primarily by distance
     # (all zones for "Mile" together, etc.).
     group_by: GroupBy = GroupBy.ZONE
+
+    # Row ordering for the Output tab and PDF: alphabetically by name, or
+    # by the averaged 5k-equivalent time that calculate() fed into
+    # training_paces() (fastest first).
+    sort_by: SortBy = SortBy.NAME
+
+    # Whether the Output tab and PDF show an extra column with each
+    # athlete's averaged 5k-equivalent time (the input calculate() fed into
+    # training_paces()), alongside the derived training paces.
+    show_average_time_column: bool = False
 
     # Populated by calculate(). None means "no selected results".
     computed_performance: dict[int, Performance | None] = field(default_factory=dict)
@@ -115,6 +132,25 @@ class AppState:
         else:
             key = lambda k: (zone_order.index(k[0]), dist_order.index(k[1]))
         return sorted(self.enabled_paces, key=key)
+
+    def sorted_athletes_for_output(self, gender: Gender) -> list[tuple[int, Athlete]]:
+        """Row order for the Output tab and PDF, for one gender.
+
+        `SortBy.NAME` orders alphabetically. `SortBy.AVERAGE_TIME` orders by
+        each athlete's computed average 5k-equivalent time (the value
+        `calculate()` fed into `training_paces()`), fastest first; athletes
+        with no computed time (calc not yet run, or nothing selected) sort
+        after everyone with a time, alphabetically among themselves.
+        """
+        entries = [(aid, a) for aid, a in self.athletes.items() if a.gender is gender]
+        if self.sort_by is SortBy.AVERAGE_TIME:
+            def key(entry: tuple[int, Athlete]) -> tuple[bool, float, str]:
+                athlete_id, athlete = entry
+                performance = self.computed_performance.get(athlete_id)
+                return (performance is None, performance.time_min if performance else 0.0, athlete.name)
+
+            return sorted(entries, key=key)
+        return sorted(entries, key=lambda entry: entry[1].name)
 
     def calculate(self) -> None:
         """Design.md workflow steps 3-4: average each athlete's selected

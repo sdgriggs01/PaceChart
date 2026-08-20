@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from pacechart.app_state import AppState, GroupBy, all_pace_keys
+from pacechart.app_state import AppState, GroupBy, SortBy, all_pace_keys
 from pacechart.calculator import DISPLAY_DISTANCES_KM, TRAINING_ZONES
 from pacechart.models import Athlete, Gender, Meet, RaceResult
 from pacechart.scraper import ScheduledMeet
@@ -198,6 +198,54 @@ def test_calculate_clears_previous_results_first():
 
     assert state.computed_performance[1] is None
     assert state.computed_paces[1] is None
+
+
+def test_sorted_athletes_for_output_defaults_to_name():
+    _, zed = make_athlete(1, "Zed", Gender.BOYS)
+    _, amy = make_athlete(2, "Amy", Gender.BOYS)
+    state = AppState(athletes={1: zed, 2: amy})
+
+    ordered = state.sorted_athletes_for_output(Gender.BOYS)
+
+    assert [a.name for _, a in ordered] == ["Amy", "Zed"]
+
+
+def test_sorted_athletes_for_output_by_average_time_orders_fastest_first():
+    fast_result = RaceResult(meet=make_meet(), distance_km=5.0, time_seconds=1000, selected=True)
+    slow_result = RaceResult(meet=make_meet(), distance_km=5.0, time_seconds=1300, selected=True)
+    _, slow = make_athlete(1, "Slow Sam", Gender.BOYS, results=[slow_result])
+    _, fast = make_athlete(2, "Fast Fran", Gender.BOYS, results=[fast_result])
+    state = AppState(athletes={1: slow, 2: fast})
+    state.sort_by = SortBy.AVERAGE_TIME
+    state.calculate()
+
+    ordered = state.sorted_athletes_for_output(Gender.BOYS)
+
+    assert [a.name for _, a in ordered] == ["Fast Fran", "Slow Sam"]
+
+
+def test_sorted_athletes_for_output_by_average_time_puts_no_result_athletes_last():
+    result = RaceResult(meet=make_meet(), distance_km=5.0, time_seconds=1200, selected=True)
+    _, has_result = make_athlete(1, "Amy", Gender.BOYS, results=[result])
+    _, no_result = make_athlete(2, "Zed", Gender.BOYS, results=[])
+    state = AppState(athletes={1: has_result, 2: no_result})
+    state.sort_by = SortBy.AVERAGE_TIME
+    state.calculate()
+
+    ordered = state.sorted_athletes_for_output(Gender.BOYS)
+
+    assert [a.name for _, a in ordered] == ["Amy", "Zed"]
+
+
+def test_sorted_athletes_for_output_by_average_time_before_calculate_falls_back_to_name():
+    _, zed = make_athlete(1, "Zed", Gender.BOYS)
+    _, amy = make_athlete(2, "Amy", Gender.BOYS)
+    state = AppState(athletes={1: zed, 2: amy})
+    state.sort_by = SortBy.AVERAGE_TIME
+
+    ordered = state.sorted_athletes_for_output(Gender.BOYS)
+
+    assert [a.name for _, a in ordered] == ["Amy", "Zed"]
 
 
 def test_sorted_enabled_paces_defaults_to_grouped_by_zone():

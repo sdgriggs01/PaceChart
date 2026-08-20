@@ -53,13 +53,17 @@ installer that requires no admin rights (installs to
 
 A fresh installer is built automatically on every push to `master` (see
 `.github/workflows/build-installer.yml`), published to the
-[latest release](https://github.com/sdgriggs01/PaceChart/releases/latest),
-and also uploaded as a workflow artifact. To build one locally:
+[latest release](https://github.com/sdgriggs01/PaceChart/releases/latest)
+(a rolling build, not a numbered version), and also uploaded as a workflow
+artifact. To cut a numbered release instead, bump `version` in
+`pyproject.toml` and push a matching `vX.Y.Z` tag (e.g. `v1.0.0`) — the
+same workflow builds the installer and publishes it as that tagged
+release. To build one locally:
 
 ```powershell
 .venv\Scripts\python.exe -m pip install -e ".[build]"
 .venv\Scripts\python.exe -m PyInstaller packaging\pacechart.spec --distpath build\dist --workpath build\work --noconfirm
-& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=0.1.0" packaging\installer.iss
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=1.0.0" packaging\installer.iss
 ```
 
 This needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) installed

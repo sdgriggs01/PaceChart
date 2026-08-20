@@ -1,7 +1,7 @@
 [project]
 name = "pacechart"
-version = "0.1.0"
-description = "Scrapes Green Hope XC roster/results, converts marks to a 5k-equivalent, and generates a training-pace PDF."
+version = "1.0.0"
+description = "Scrapes Green Hope XC and track roster/results, converts marks to a 5k- or 3k-equivalent, and generates a training-pace PDF."
 requires-python = ">=3.11"
 license = "MIT"
 dependencies = [

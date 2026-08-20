@@ -3,6 +3,7 @@ name: Build installer
 on:
   push:
     branches: [master]
+    tags: ["v*.*.*"]
 
 permissions:
   contents: write
@@ -26,6 +27,13 @@ jobs:
         id: version
         run: |
           $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $tagVersion = "${{ github.ref_name }}".TrimStart("v")
+            if ($tagVersion -ne $version) {
+              Write-Error "Tag ${{ github.ref_name }} does not match pyproject.toml version $version"
+              exit 1
+            }
+          }
           echo "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Build frozen app with PyInstaller
@@ -46,16 +54,28 @@ jobs:
           if-no-files-found: error
 
       - name: Move 'latest' tag to this commit
+        if: github.ref_type == 'branch'
         run: |
           git tag -f latest
           git push origin latest --force
 
-      - name: Publish GitHub Release
+      - name: Publish rolling 'latest' build
+        if: github.ref_type == 'branch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: "Latest build (v${{ steps.version.outputs.version }})"
           body: |
             Automatically built from [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) on master. This release is updated on every push to master.
+          make_latest: false
+          files: build/installer/PaceChartSetup.exe
+
+      - name: Publish versioned release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "v${{ steps.version.outputs.version }}"
+          generate_release_notes: true
           make_latest: true
           files: build/installer/PaceChartSetup.exe

@@ -12,7 +12,7 @@
   #define MyAppVersion "0.0.0"
 #endif
 #define MyAppExeName "PaceChart.exe"
-#define MyAppPublisher "Green Hope Cross Country"
+#define MyAppPublisher "Simon Griggs"
 
 [Setup]
 ; Fixed AppId so future versions upgrade in place instead of installing

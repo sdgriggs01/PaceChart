@@ -92,7 +92,7 @@ def test_build_rows_includes_5k_mark_column_when_enabled():
 
     assert rows[0][1] == "5k Mark"
     by_name = {row[0]: row[1] for row in rows[1:]}
-    assert by_name["Bob Smith"] == "19:18.6"
+    assert by_name["Bob Smith"] == "19:19"
     assert by_name["Zed NoResult"] == ""
 
 

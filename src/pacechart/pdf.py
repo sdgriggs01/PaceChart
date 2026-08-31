@@ -74,7 +74,7 @@ def _build_rows(state: AppState, gender: Gender, pace_keys: list[PaceKey]) -> li
         row = [athlete.name]
         if state.show_average_time_column:
             performance = state.computed_performance.get(athlete_id)
-            row.append(format_minutes(performance.time_min, decimals=1) if performance else "")
+            row.append(format_minutes(performance.time_min, decimals=0) if performance else "")
         paces = state.computed_paces.get(athlete_id)
         for zone, dist in pace_keys:
             if paces is None:

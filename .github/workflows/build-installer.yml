@@ -10,7 +10,18 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+          - platform: macos
+            os: macos-latest
+          - platform: linux
+            os: ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +36,7 @@ jobs:
 
       - name: Read version from pyproject.toml
         id: version
+        shell: pwsh
         run: |
           $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
           if ("${{ github.ref_type }}" -eq "tag") {
@@ -37,21 +49,63 @@ jobs:
           echo "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Build frozen app with PyInstaller
+        env:
+          PACECHART_VERSION: ${{ steps.version.outputs.version }}
         run: pyinstaller packaging/pacechart.spec --distpath build/dist --workpath build/work --noconfirm
 
+      # --- Windows: Inno Setup installer ---
+
       - name: Install Inno Setup
+        if: matrix.platform == 'windows'
         run: choco install innosetup -y --no-progress
 
       - name: Build installer with Inno Setup
+        if: matrix.platform == 'windows'
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=${{ steps.version.outputs.version }}" packaging\installer.iss
+
+      # --- macOS: drag-to-Applications .dmg ---
+
+      - name: Build .dmg
+        if: matrix.platform == 'macos'
+        run: packaging/macos/build-dmg.sh "${{ steps.version.outputs.version }}"
+
+      # --- Linux (incl. Chromebook Linux/Crostini): .deb package ---
+
+      - name: Build .deb
+        if: matrix.platform == 'linux'
+        run: packaging/linux/build-deb.sh "${{ steps.version.outputs.version }}"
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PaceChartSetup-${{ steps.version.outputs.version }}
-          path: build/installer/PaceChartSetup.exe
+          name: installer-${{ matrix.platform }}
+          path: build/installer
           if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read version from pyproject.toml
+        id: version
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download all installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: installer-*
+          path: build/installer
+          merge-multiple: true
 
       - name: Move 'latest' tag to this commit
         if: github.ref_type == 'branch'
@@ -67,8 +121,12 @@ jobs:
           name: "Latest build (v${{ steps.version.outputs.version }})"
           body: |
             Automatically built from [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) on master. This release is updated on every push to master.
+
+            - **Windows**: `PaceChartSetup.exe`
+            - **macOS**: `PaceChartSetup.dmg` (unsigned -- see README for the Gatekeeper workaround)
+            - **Chromebook / Linux**: `pacechart_*_amd64.deb` (install inside the Chromebook's Linux/Crostini terminal)
           make_latest: false
-          files: build/installer/PaceChartSetup.exe
+          files: build/installer/*
 
       - name: Publish versioned release
         if: github.ref_type == 'tag'
@@ -78,4 +136,4 @@ jobs:
           name: "v${{ steps.version.outputs.version }}"
           generate_release_notes: true
           make_latest: true
-          files: build/installer/PaceChartSetup.exe
+          files: build/installer/*

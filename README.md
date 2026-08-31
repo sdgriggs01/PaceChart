@@ -11,7 +11,7 @@ See [Design.md](Design.md) for the full design/workflow spec and [Calculator-Met
 
 ## Requirements
 
-- Windows (the app looks for the Georgia font and `%APPDATA%` in Windows-specific locations, with graceful fallbacks elsewhere)
+- Windows, macOS, or a Chromebook with Linux (Crostini) enabled (the app looks for the Georgia font and `%APPDATA%` in Windows-specific locations, with graceful fallbacks elsewhere)
 - Python 3.11+
 
 ## Setup
@@ -45,22 +45,45 @@ This opens the GUI, which follows the workflow in [Design.md](Design.md):
 
 Tests run in CI on every pull request and push to `master` (see `.github/workflows/tests.yml`).
 
+## Installing (coaches)
+
+Coaches don't need Python installed. Grab the installer for your platform
+from the [latest release](https://github.com/sdgriggs01/PaceChart/releases/latest):
+
+- **Windows** — run `PaceChartSetup.exe`. It's a per-user installer that
+  requires no admin rights (installs to `%LocalAppData%\Programs\PaceChart`).
+- **macOS** — open `PaceChartSetup.dmg` and drag PaceChart into
+  Applications. The app isn't code-signed (no Apple Developer account), so
+  Gatekeeper will refuse to open it the first time with an "unidentified
+  developer" warning. Right-click (or Control-click) the app in Applications
+  and choose **Open**, then confirm in the dialog — you only need to do this
+  once.
+- **Chromebook** — turn on **Linux (Beta)** in Chromebook Settings first
+  (Settings → Advanced → Developers), then download `pacechart_*_amd64.deb`
+  from the Chromebook's Files app and select **Install with Linux (Beta)**,
+  or run `sudo dpkg -i ~/Downloads/pacechart_*_amd64.deb` in the Linux
+  terminal. PaceChart then appears in the Chromebook's app launcher. This
+  only works on Chromebooks with an Intel/AMD (x86_64) processor, which is
+  most of them — ARM-based Chromebooks aren't supported yet.
+
 ## Building the installer
 
-Coaches don't need Python installed — the app ships as a per-user Windows
-installer that requires no admin rights (installs to
-`%LocalAppData%\Programs\PaceChart`).
-
-A fresh installer is built automatically on every push to `master` (see
+A fresh set of installers (Windows, macOS, and Chromebook/Linux) is built
+automatically on every push to `master` (see
 `.github/workflows/build-installer.yml`), published to the
 [latest release](https://github.com/sdgriggs01/PaceChart/releases/latest)
-(a rolling build, not a numbered version), and also uploaded as a workflow
-artifact. To cut a numbered release instead, bump `version` in
+(a rolling build, not a numbered version), and also uploaded as workflow
+artifacts. To cut a numbered release instead, bump `version` in
 `pyproject.toml` and push a matching `vX.Y.Z` tag (e.g. `v1.0.0`) — the
-same workflow builds the installer and publishes it as that tagged
-release. To build one locally:
+same workflow builds all three installers and publishes them as that
+tagged release.
+
+Each platform's installer must be built on that platform — PyInstaller
+doesn't cross-compile — so building locally only produces the installer
+for the machine you're on:
 
 ```powershell
+# Windows
 .venv\Scripts\python.exe -m pip install -e ".[build]"
 .venv\Scripts\python.exe -m PyInstaller packaging\pacechart.spec --distpath build\dist --workpath build\work --noconfirm
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=1.0.0" packaging\installer.iss
@@ -69,6 +92,24 @@ release. To build one locally:
 This needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) installed
 (`winget install JRSoftware.InnoSetup` or `choco install innosetup`). The
 resulting `PaceChartSetup.exe` is written to `build\installer\`.
+
+```bash
+# macOS
+python3 -m pip install -e ".[build]"
+python3 -m PyInstaller packaging/pacechart.spec --distpath build/dist --workpath build/work --noconfirm
+packaging/macos/build-dmg.sh 1.0.0
+```
+
+The resulting `PaceChartSetup.dmg` is written to `build/installer/`.
+
+```bash
+# Chromebook Linux (Crostini) / Debian / Ubuntu
+python3 -m pip install -e ".[build]"
+python3 -m PyInstaller packaging/pacechart.spec --distpath build/dist --workpath build/work --noconfirm
+packaging/linux/build-deb.sh 1.0.0
+```
+
+The resulting `pacechart_1.0.0_amd64.deb` is written to `build/installer/`.
 
 ## Project layout
 

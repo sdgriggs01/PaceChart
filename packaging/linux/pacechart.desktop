@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PaceChart
+Comment=Generate training-pace charts from meet results
+Exec=/opt/pacechart/PaceChart
+Icon=/usr/share/pixmaps/pacechart.png
+Terminal=false
+Categories=Utility;Education;

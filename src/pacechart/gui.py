@@ -616,7 +616,7 @@ class App(ttk.Frame):
             col = 2
             if self.state.show_average_time_column:
                 performance = self.state.computed_performance.get(athlete_id)
-                text = format_minutes(performance.time_min, decimals=1) if performance else ""
+                text = format_minutes(performance.time_min, decimals=0) if performance else ""
                 ttk.Label(section, text=text).grid(row=row, column=col, padx=4)
                 col += 1
             paces = self.state.computed_paces.get(athlete_id)
